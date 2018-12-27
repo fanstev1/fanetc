@@ -23,7 +23,7 @@ factor_desp<- function(df, group) {
 
   # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)
   # here we are going to drop unused levels (drop.unused.levels = TRUE)
-  table_obj<- xtabs( ~ ., data= df, addNA= TRUE, drop.unused.levels = TRUE)
+  table_obj<- xtabs( ~ ., data= df, addNA= FALSE, drop.unused.levels = TRUE)
 
   if (rlang::quo_is_missing(group)) {
     factor_dist(table_obj = table_obj,
@@ -64,7 +64,9 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                    m_idx<- grep(x, fct_var_name)
 
                    freq <- margin.table(table_obj, margin= m_idx)
-                   if (removeNA) freq <- freq[!is.na(names(freq))]
+                   # if (removeNA) {
+                   #   freq <- freq[!is.na(names(freq))]
+                   # }
                    pct  <- prop.table(freq)
 
                    freq<- freq %>%
@@ -81,6 +83,7 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                      dplyr::select(level, n, freq)
 
                    pct<- pct %>%
+                     addmargins() %>%
                      as.data.frame(row.names= x,
                                    responseName = "pct",
                                    stringsAsFactors = FALSE) %>%
@@ -110,7 +113,9 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                    m_idx<- grep( paste0("^", x, "$"), fct_var_name)
 
                    freq <- margin.table(table_obj, margin= c(m_idx, col_idx))
-                   if (removeNA) freq <- freq[!is.na(rownames(freq)), !is.na(colnames(freq))]
+                   # if (removeNA) {
+                   #   freq <- freq[!is.na(rownames(freq)), !is.na(colnames(freq))]
+                   # }
                    pct  <- prop.table(freq, margin = 2)
 
                    # fisher exact test

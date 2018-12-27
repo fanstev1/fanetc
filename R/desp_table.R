@@ -24,17 +24,26 @@
 #'          sex   = factor(sex, 1:2, labels = c("Female", "Male")),
 #'          grade = ifelse(runif(990)<.25, NA, grade),
 #'          grade   = factor(grade, 1:4, labels = c("A", "B", "C", "D")))
+#'
 #'  datadic<- data.frame(var_name= c("sex", "grade", "income", "dm", "af"),
 #'                       var_desp= c("Sex", "Grade", "Household income",
-#'                                   "Presence of diabetes mellitus", "African American"))
+#'                                   "Presence of diabetes mellitus", "African American"),
+#'                      stringsAsFactors = FALSE)
 #'
 #' table_one(df, sex)
 #' table_one(df, sex, datadic= datadic)
-table_one<- function(df, group, datadic= NULL, var_name= "var_name", var_desp= "var_desp") {
+table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   op<- options(warn = -1)
   on.exit(options(op))
 
   group<- rlang::enquo(group)
+  var_name<- rlang::enquo(var_name)
+  var_desp<- rlang::enquo(var_desp)
+
+  if (rlang::quo_is_missing(var_name)) var_name<- quo(var_name)
+  if (rlang::quo_is_missing(var_desp)) var_desp<- quo(var_desp)
+
+
 
   if (rlang::quo_is_missing(group)) {
     df<- df %>%
@@ -66,7 +75,9 @@ table_one<- function(df, group, datadic= NULL, var_name= "var_name", var_desp= "
     factor_desp(df, !!group) %>%
       rownames_to_column("row_id") %>%
       rename(type= level) %>%
-      mutate(row_id= ifelse(type!= ".", paste(variable, type, sep= "_"), variable)) %>%
+      mutate(row_id= ifelse(type!= "." & !is.na(type),
+                            paste(variable, type, sep= "_"),
+                            variable)) %>%
       split(., .$variable)
   } else NULL
 
@@ -86,19 +97,34 @@ table_one<- function(df, group, datadic= NULL, var_name= "var_name", var_desp= "
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
       dplyr::select(row_id, variable, type,
-                    ends_with("n"), ends_with("stat"),
-                    everything())
+                    ends_with("n"), ends_with("stat")) %>%
+      mutate(type= ifelse(is.na(type) & row_id==variable,
+                          gsub("(^[[:lower:]])", "\\U\\1", variable, perl=TRUE), type),
+             type= ifelse(type %in% c("meansd", "mediqr"),
+                          gsub("(^[[:lower:]])", "\\U\\1", variable, perl=TRUE), type),
+             type= ifelse(row_id==paste0(variable, "TRUE"),
+                          gsub("(^[[:lower:]])", "\\U\\1", variable, perl=TRUE), type)) %>%
+      rename(`var_desp`= type)
   } else {
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
-      left_join(select_(datadic, .dots= c(var_name, var_desp)),
-                by= c("variable"= var_name)) %>%
+      left_join(dplyr::select(datadic, var_name, var_desp),
+                by= c("variable"= quo_name(var_name))) %>%
+      mutate(type= ifelse(is.na(type) & row_id==variable, !!var_desp, type), # factor
+             type= ifelse(type %in% c("meansd", "mediqr"), !!var_desp, type), # continuous
+             type= ifelse(row_id==paste0(variable, "TRUE"), !!var_desp, type), # logical
+             ) %>%
       dplyr::select(row_id, variable, type,
-                    ends_with("n"), ends_with("stat"),
-                    everything())
+                    ends_with("n"), ends_with("stat")) %>%
+      rename(`var_desp`= type)
   }
 
   out
 }
 
 
+
+# dd %>%
+#   mutate(type= ifelse(is.na(type) & row_id==variable, var_desp, type),
+#          type= ifelse(type %in% c("meansd", "mediqr"), var_desp, type),
+#          type= ifelse(row_id==paste0(variable, "TRUE"), var_desp, type))
