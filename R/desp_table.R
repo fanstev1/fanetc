@@ -92,7 +92,7 @@ table_one<- function(df, group, datadic= NULL, var_name= "var_name", var_desp= "
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
       left_join(select_(datadic, .dots= c(var_name, var_desp)),
-                by= c("variable"= var_name)) %>%
+                by= c("variable"= quo_name(var_name))) %>%
       dplyr::select(row_id, variable, type,
                     ends_with("n"), ends_with("stat"),
                     everything())

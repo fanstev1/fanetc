@@ -6,35 +6,140 @@
 #'
 #' @param df Dataframe
 #' @return a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
-factor_desp<- function(df, group) {
+factor_desp<- function(df, group, includeNA= FALSE) {
+
+  ##
+  make_univariate_fml<- function(x, y= NULL) {
+    sapply(x, function(x){
+      if (is.null(y)) formula(paste0("~", x)) else formula(paste0(y, "~", x))
+    })
+  }
+
+  make_bivariate_fml<- function(x, z, y= NULL) {
+    sapply(x, function(x){
+      if (is.null(y)) formula(paste0("~", x, " + ", z)) else formula(paste0(y, "~", x, " + ", z))
+    })
+  }
+
+  output_one_way_tbl<- function(freq, pct_digits= 1) {
+    pct  <- prop.table(freq)
+    freq<- freq %>%
+      addmargins() %>%
+      as.data.frame(row.names= names(dimnames(.)),
+                    responseName = "freq",
+                    stringsAsFactors = FALSE) %>%
+      rownames_to_column("level") %>%
+      mutate(n   = ifelse(level=="Sum", freq, NA),
+             freq= ifelse(level=="Sum", NA, freq),
+             n   = formatC(n, format= "d", big.mark = ","),
+             freq= formatC(freq, format= "d", big.mark = ",")
+      ) %>%
+      dplyr::select(level, n, freq)
+
+    pct<- pct %>%
+      as.data.frame(row.names= names(dimnames(.)),
+                    responseName = "pct",
+                    stringsAsFactors = FALSE) %>%
+      rownames_to_column("level") %>%
+      mutate(pct= formatC(pct*100, digits= pct_digits, format= "f")) %>%
+      dplyr::select(level, pct)
+
+    full_join(freq, pct, by = c("level")) %>%
+      mutate(stat= paste0(freq, " (", pct, "%)"),
+             stat= ifelse(level=="Sum", NA_character_, stat),
+             level= ifelse(level=="Sum", ".", level)) %>%
+      dplyr::select(level, n, stat) %>%
+      arrange(level)
+  }
+
+  output_two_way_tbl<- function(freq, pct_digits= 1) {
+    tbl_var_name<- names(dimnames(freq))
+    pct  <- prop.table(freq, margin = 2)
+
+    # fisher exact test
+    test<- try(fisher.test(freq, hybrid = TRUE, conf.int = FALSE), silent = TRUE)
+    test<- if (class(test)=="try-error") NA else test$p.value
+
+    # total
+    total<- margin.table(freq, 2) %>%
+      as.data.frame(responseName = "n", stringsAsFactors = FALSE) %>%
+      mutate(n= formatC(n, format= "d", big.mark = ",")) %>%
+      dcast(as.formula( paste0(". ~ ", tbl_var_name[2])), value.var = "n") %>%
+      bind_cols(pval= format_pvalue(test))
+
+
+    freq<- freq %>%
+      as.data.frame(responseName = "freq", stringsAsFactors = FALSE) %>%
+      mutate(freq= formatC(freq, format= "d", big.mark = ","))
+
+    pct<- pct %>%
+      as.data.frame(responseName = "pct", stringsAsFactors = FALSE) %>%
+      mutate(pct= formatC(pct*100, digits= pct_digits, format= "f"))
+
+    out<- full_join(freq, pct, by= tbl_var_name) %>%
+      mutate(stat= paste0(freq, " (", pct, "%)")) %>%
+      # bind_rows(total) %>%
+      dplyr::select(-freq, -pct) %>%
+      dcast(as.formula(paste0(tbl_var_name, collapse= " ~ ")), value.var = "stat")
+
+    names(out)[1]<- names(total)[1]<- "level"
+    out<- full_join(total, out, by= "level", suffix= c("_n", "_stat"))
+    out
+  }
+  ##
+
 
   group<- rlang::enquo(group)
 
   # 1 - select variables of factor class
-  df<- if (rlang::quo_is_missing(group)) {
-    df %>%
+  if (rlang::quo_is_missing(group)) {
+    df<- df %>%
       ungroup() %>%
       select_if(is.factor)
+
+    fml<- make_univariate_fml(names(df))
+    # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)
+    # here we are going to drop unused levels (drop.unused.levels = TRUE)
+    tbl_list<- lapply(fml, xtabs, data= df, addNA= includeNA, drop.unused.levels = TRUE)
+    out     <- lapply(tbl_list, output_one_way_tbl, pct_digits = if (nrow(df)< 200) 0 else 1)
+
   } else {
-    df %>%
+    df<- df %>%
       group_by(!!group) %>%
       select_if(is.factor)
+
+    fml<- make_bivariate_fml(grep(quo_name(group), names(df), value= TRUE, invert = TRUE),
+                             z= quo_name(group))
+
+    # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)
+    # here we are going to drop unused levels (drop.unused.levels = TRUE)
+    tbl_list<- lapply(fml, xtabs, data= df, addNA= includeNA, drop.unused.levels = TRUE)
+    out     <- lapply(tbl_list, output_two_way_tbl, pct_digits = if (nrow(df)< 200) 0 else 1)
   }
 
+  out<- out %>%
+    bind_rows(.id= "variable") %>%
+    mutate(level= ifelse(level==".", NA_character_, level))
+  out
   # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)
   # here we are going to drop unused levels (drop.unused.levels = TRUE)
-  table_obj<- xtabs( ~ ., data= df, addNA= TRUE, drop.unused.levels = TRUE)
+  # table_obj<- lapply(fml, xtabs, data= df, addNA= FALSE, drop.unused.levels = TRUE)
 
-  if (rlang::quo_is_missing(group)) {
-    factor_dist(table_obj = table_obj,
-                pct_digits = if (nrow(df)< 200) 0 else 1)
-  } else {
-    factor_dist(table_obj = table_obj,
-                col_var = rlang::UQ(group),
-                pct_digits = if (nrow(df)< 200) 0 else 1)
-  }
+  # table_obj<- xtabs( ~ ., data= df, addNA= TRUE, drop.unused.levels = TRUE)
+
+  # if (rlang::quo_is_missing(group)) {
+  #   factor_dist(table_obj = table_obj,
+  #               pct_digits = if (nrow(df)< 200) 0 else 1)
+  # } else {
+  #   factor_dist(table_obj = table_obj,
+  #               col_var = rlang::UQ(group),
+  #               pct_digits = if (nrow(df)< 200) 0 else 1)
+  # }
+
 
 }
+
+
 
 #' @title factor_dist
 #'
@@ -69,7 +174,7 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
 
                    freq<- freq %>%
                      addmargins() %>%
-                     as.data.frame(row.names= x,
+                     as.data.frame(row.names= names(dimnames(.)),
                                    responseName = "freq",
                                    stringsAsFactors = FALSE) %>%
                      rownames_to_column("level") %>%
@@ -81,7 +186,7 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                      dplyr::select(level, n, freq)
 
                    pct<- pct %>%
-                     as.data.frame(row.names= x,
+                     as.data.frame(row.names= names(dimnames(.)),
                                    responseName = "pct",
                                    stringsAsFactors = FALSE) %>%
                      rownames_to_column("level") %>%
