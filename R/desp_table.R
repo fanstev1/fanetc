@@ -43,7 +43,6 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   if (rlang::quo_is_missing(var_name)) var_name<- quo(var_name)
   if (rlang::quo_is_missing(var_desp)) var_desp<- quo(var_desp)
 
-
   if (rlang::quo_is_missing(group)) {
     df<- df %>%
       select_if(Negate(is.character)) %>%
@@ -51,8 +50,6 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       as.data.frame() %>%
       mutate_if(is.factor, droplevels) %>%
       as_data_frame()
-
-    # df[] <- lapply(df, function(x) if(is.factor(x)) droplevels(x) else x)
 
 
     group_var_idx<- NULL
@@ -92,7 +89,6 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       split(., .$variable)
   } else NULL
 
-
   out_lst<- num_out_lst %>%
     append(fct_out_lst) %>%
     append(logic_out_lst)
@@ -125,10 +121,3 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
 
   out
 }
-
-
-
-# dd %>%
-#   mutate(type= ifelse(is.na(type) & row_id==variable, var_desp, type),
-#          type= ifelse(type %in% c("meansd", "mediqr"), var_desp, type),
-#          type= ifelse(row_id==paste0(variable, "TRUE"), var_desp, type))
