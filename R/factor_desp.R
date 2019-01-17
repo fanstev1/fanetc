@@ -123,8 +123,6 @@ factor_desp<- function(df, group, includeNA= FALSE) {
   out
   # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)
   # here we are going to drop unused levels (drop.unused.levels = TRUE)
-  # table_obj<- lapply(fml, xtabs, data= df, addNA= FALSE, drop.unused.levels = TRUE)
-
   # table_obj<- xtabs( ~ ., data= df, addNA= TRUE, drop.unused.levels = TRUE)
 
   # if (rlang::quo_is_missing(group)) {
@@ -135,8 +133,6 @@ factor_desp<- function(df, group, includeNA= FALSE) {
   #               col_var = rlang::UQ(group),
   #               pct_digits = if (nrow(df)< 200) 0 else 1)
   # }
-
-
 }
 
 
@@ -169,7 +165,9 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                    m_idx<- grep(x, fct_var_name)
 
                    freq <- margin.table(table_obj, margin= m_idx)
-                   if (removeNA) freq <- freq[!is.na(names(freq))]
+                   # if (removeNA) {
+                   #   freq <- freq[!is.na(names(freq))]
+                   # }
                    pct  <- prop.table(freq)
 
                    freq<- freq %>%
@@ -187,6 +185,7 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
 
                    pct<- pct %>%
                      as.data.frame(row.names= names(dimnames(.)),
+
                                    responseName = "pct",
                                    stringsAsFactors = FALSE) %>%
                      rownames_to_column("level") %>%
@@ -215,7 +214,9 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                    m_idx<- grep( paste0("^", x, "$"), fct_var_name)
 
                    freq <- margin.table(table_obj, margin= c(m_idx, col_idx))
-                   if (removeNA) freq <- freq[!is.na(rownames(freq)), !is.na(colnames(freq))]
+                   # if (removeNA) {
+                   #   freq <- freq[!is.na(rownames(freq)), !is.na(colnames(freq))]
+                   # }
                    pct  <- prop.table(freq, margin = 2)
 
                    # fisher exact test
