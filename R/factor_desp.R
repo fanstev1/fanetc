@@ -75,10 +75,10 @@ factor_dist<- function(table_obj, col_var, pct_digits= 1, removeNA= TRUE) {
                                    responseName = "freq",
                                    stringsAsFactors = FALSE) %>%
                      rownames_to_column("level") %>%
-                     mutate(n   = ifelse(level=="Sum", freq, NA),
-                            freq= ifelse(level=="Sum", NA, freq),
-                            n   = formatC(n, format= "d", big.mark = ","),
-                            freq= formatC(freq, format= "d", big.mark = ",")
+                     mutate(n   = ifelse(level=="Sum", freq, NA_integer_),
+                            n   = ifelse(!is.na(n), formatC(n, format= "d", big.mark = ","), NA_character_),
+                            freq= ifelse(level=="Sum", NA_integer_, freq),
+                            freq= ifelse(!is.na(freq), formatC(freq, format= "d", big.mark = ","), NA_character_),
                      ) %>%
                      dplyr::select(level, n, freq)
 

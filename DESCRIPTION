@@ -5,7 +5,7 @@ Version: 0.1.0
 Author: Chun-Po Steve Fan
 Maintainer: Steve Fan <steve.fan@sickkids.ca>
 Description: Miscellaneous functions that Steve wrote to facilitate CVDMC data analysis project.
-Depends: magrittr, tidyverse, rlang, lubridate, reshape2, Hmisc, survival, broom, openxlsx, mice
+Depends: magrittr, tidyverse, rlang, forcats, lubridate, reshape2, Hmisc, survival, broom, openxlsx, mice
 Suggests: splines, mitools, purrr
 License: What license is it under?
 Encoding: UTF-8

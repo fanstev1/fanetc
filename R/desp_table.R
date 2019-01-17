@@ -44,12 +44,16 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   if (rlang::quo_is_missing(var_desp)) var_desp<- quo(var_desp)
 
 
-
   if (rlang::quo_is_missing(group)) {
     df<- df %>%
       select_if(Negate(is.character)) %>%
       select_if(Negate(is.Date)) %>%
-      mutate_if(is.factor, droplevels)
+      as.data.frame() %>%
+      mutate_if(is.factor, droplevels) %>%
+      as_data_frame()
+
+    # df[] <- lapply(df, function(x) if(is.factor(x)) droplevels(x) else x)
+
 
     group_var_idx<- NULL
   } else {
@@ -76,7 +80,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       rownames_to_column("row_id") %>%
       rename(type= level) %>%
       mutate(row_id= ifelse(type!= "." & !is.na(type),
-                            paste(variable, type, sep= "_"),
+                            paste(variable, gsub("\\ ", "_", trimws(type)), sep= "_"),
                             variable)) %>%
       split(., .$variable)
   } else NULL
@@ -97,7 +101,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
       dplyr::select(row_id, variable, type,
-                    ends_with("n"), ends_with("stat")) %>%
+                    ends_with("n"), ends_with("stat"), everything()) %>%
       mutate(type= ifelse(is.na(type) & row_id==variable,
                           gsub("(^[[:lower:]])", "\\U\\1", variable, perl=TRUE), type),
              type= ifelse(type %in% c("meansd", "mediqr"),
@@ -108,14 +112,14 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   } else {
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
-      left_join(dplyr::select(datadic, var_name, var_desp),
+      left_join(dplyr::select(datadic, !!var_name, !!var_desp),
                 by= c("variable"= quo_name(var_name))) %>%
       mutate(type= ifelse(is.na(type) & row_id==variable, !!var_desp, type), # factor
              type= ifelse(type %in% c("meansd", "mediqr"), !!var_desp, type), # continuous
              type= ifelse(row_id==paste0(variable, "TRUE"), !!var_desp, type), # logical
              ) %>%
       dplyr::select(row_id, variable, type,
-                    ends_with("n"), ends_with("stat")) %>%
+                    ends_with("n"), ends_with("stat"), everything()) %>%
       rename(`var_desp`= type)
   }
 
