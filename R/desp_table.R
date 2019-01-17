@@ -43,8 +43,6 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   if (rlang::quo_is_missing(var_name)) var_name<- quo(var_name)
   if (rlang::quo_is_missing(var_desp)) var_desp<- quo(var_desp)
 
-
-
   if (rlang::quo_is_missing(group)) {
     df<- df %>%
       select_if(Negate(is.character)) %>%
@@ -88,7 +86,6 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       split(., .$variable)
   } else NULL
 
-
   out_lst<- num_out_lst %>%
     append(fct_out_lst) %>%
     append(logic_out_lst)
@@ -108,17 +105,12 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   } else {
     out<- out_lst[names(df)] %>%
       bind_rows() %>%
-# <<<<<<< HEAD
-#       left_join(select_(datadic, .dots= c(var_name, var_desp)),
-#                 by= c("variable"= quo_name(var_name))) %>%
-# =======
       left_join(dplyr::select(datadic, var_name, var_desp),
                 by= c("variable"= quo_name(var_name))) %>%
       mutate(type= ifelse(is.na(type) & row_id==variable, !!var_desp, type), # factor
              type= ifelse(type %in% c("meansd", "mediqr"), !!var_desp, type), # continuous
              type= ifelse(row_id==paste0(variable, "TRUE"), !!var_desp, type), # logical
              ) %>%
-# >>>>>>> 9d09fc7be5dadcadac8a0267bb64dba4781a6776
       dplyr::select(row_id, variable, type,
                     ends_with("n"), ends_with("stat")) %>%
       rename(`var_desp`= type)
@@ -126,10 +118,3 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
 
   out
 }
-
-
-
-# dd %>%
-#   mutate(type= ifelse(is.na(type) & row_id==variable, var_desp, type),
-#          type= ifelse(type %in% c("meansd", "mediqr"), var_desp, type),
-#          type= ifelse(row_id==paste0(variable, "TRUE"), var_desp, type))
