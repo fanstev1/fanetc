@@ -47,7 +47,9 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
     df<- df %>%
       select_if(Negate(is.character)) %>%
       select_if(Negate(is.Date)) %>%
-      mutate_if(is.factor, droplevels)
+      as.data.frame() %>%
+      mutate_if(is.factor, droplevels) %>%
+      as_data_frame()
 
     group_var_idx<- NULL
   } else {
