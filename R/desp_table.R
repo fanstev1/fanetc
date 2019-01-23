@@ -98,6 +98,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       bind_rows() %>%
       dplyr::select(row_id, variable, type,
                     ends_with("n"), ends_with("stat"), everything()) %>%
+      dplyr::select(-!!var_desp) %>%
       mutate(type= ifelse(is.na(type) & row_id==variable,
                           gsub("(^[[:lower:]])", "\\U\\1", variable, perl=TRUE), type),
              type= ifelse(type %in% c("meansd", "mediqr"),
@@ -116,6 +117,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
              ) %>%
       dplyr::select(row_id, variable, type,
                     ends_with("n"), ends_with("stat"), everything()) %>%
+      dplyr::select(-!!var_desp) %>%
       rename(`var_desp`= type)
   }
 

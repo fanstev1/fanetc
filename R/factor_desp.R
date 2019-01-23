@@ -31,8 +31,8 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       rownames_to_column("level") %>%
       mutate(n   = ifelse(level=="Sum", freq, NA),
              freq= ifelse(level=="Sum", NA, freq),
-             n   = formatC(n, format= "d", big.mark = ","),
-             freq= formatC(freq, format= "d", big.mark = ",")
+             n   = ifelse(!is.na(n), formatC(n, format= "d", big.mark = ","), NA_character_),
+             freq= ifelse(!is.na(freq), formatC(freq, format= "d", big.mark = ","), NA_character_)
       ) %>%
       dplyr::select(level, n, freq)
 
@@ -57,20 +57,20 @@ factor_desp<- function(df, group, includeNA= FALSE) {
     pct  <- prop.table(freq, margin = 2)
 
     # fisher exact test
-    test<- try(fisher.test(freq, hybrid = TRUE, conf.int = FALSE), silent = TRUE)
+    test<- try(fisher.test(freq, hybrid = TRUE, conf.int = FALSE, simulate.p.value= TRUE, B= 9999), silent = TRUE)
     test<- if (class(test)=="try-error") NA else test$p.value
 
     # total
     total<- margin.table(freq, 2) %>%
       as.data.frame(responseName = "n", stringsAsFactors = FALSE) %>%
-      mutate(n= formatC(n, format= "d", big.mark = ",")) %>%
+      mutate(n= ifelse(!is.na(n), formatC(n, format= "d", big.mark = ","), NA_character_)) %>%
       dcast(as.formula( paste0(". ~ ", tbl_var_name[2])), value.var = "n") %>%
       bind_cols(pval= format_pvalue(test))
 
 
     freq<- freq %>%
       as.data.frame(responseName = "freq", stringsAsFactors = FALSE) %>%
-      mutate(freq= formatC(freq, format= "d", big.mark = ","))
+      mutate(freq= ifelse(!is.na(freq), formatC(freq, format= "d", big.mark = ","), NA_character_))
 
     pct<- pct %>%
       as.data.frame(responseName = "pct", stringsAsFactors = FALSE) %>%
