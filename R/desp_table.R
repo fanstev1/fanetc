@@ -62,7 +62,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
       filter(!is.na(!!group)) %>%
       group_by(!!group)
 
-    group_var_idx<- grep(group_vars(df), names(df))
+    group_var_idx<- match(group_vars(df), names(df))
   }
 
   num_out_lst<- if (any(sapply(if (is.null(group_var_idx)) df else df[-group_var_idx], class)=="numeric")) {
