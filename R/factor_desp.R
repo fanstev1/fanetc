@@ -108,7 +108,7 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       group_by(!!group) %>%
       select_if(is.factor)
 
-    fml<- make_bivariate_fml(grep(quo_name(group), names(df), value= TRUE, invert = TRUE),
+    fml<- make_bivariate_fml(grep(paste0("^", quo_name(group), "$"), names(df), value= TRUE, invert = TRUE),
                              z= quo_name(group))
 
     # 2 - create table object for ALL selected factor variables (not sure if it is a good idea but ...)

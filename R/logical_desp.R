@@ -114,7 +114,18 @@ fisher_test<- function(df, group) {
                          table() %>%
                          fisher_test()
 
-                       res<- if (class(res)=="try-error") NA else res$p.value
+                       # res<- if (class(res)=="try-error") NA else res$p.value
+                       res<- if (class(res)=="try-error") {
+                         fisher_test<- if (n_groups(df)==2) {
+                           function(...) try(fisher.test(..., conf.int= FALSE, simulate.p.value = TRUE, B=5000), silent = TRUE)
+                         } else {
+                           function(...) try(fisher.test(..., hybrid = TRUE, conf.int= FALSE, simulate.p.value = TRUE, B=5000), silent = TRUE)
+                         }
+                         res_try<- df %>%
+                           table() %>%
+                           fisher_test()
+                         if (class(res_try)=="try-error") NA else res_try$p.value
+                       } else res$p.value
                        res
                      })) %>%
     dplyr::select(-data) %>%
