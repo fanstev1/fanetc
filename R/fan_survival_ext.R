@@ -1,4 +1,31 @@
-construct_surv_var<- function(idx_dt, evt_dt, end_dt, surv_varname= NULL) {
+#' @title admin_censor_surv
+#'
+#' @details
+#' The function creates time-to-event variables with the application of administrative censoring for a binary (survival) process.
+#' The newly created variables are named by the same variables names but with a suffix of '_adm' by default. The original
+#' variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
+#' it can be useful in some situations.
+#'
+#' @param df input data
+#' @param idx_dt the index date
+#' @param evt_dt the date of the event occurrence. Its value should be NA for non-event subjects.
+#' @param end_dt the date of the last follow-up
+#' @param patid the variable indicating subject/patient id
+#' @param surv_varname an option of character vector of length 2, the 1st of which is the name of the time variable; the other is the name of the event indicator.
+#' @return A data frame with patid, evt_time and evt.
+#' @example
+#' set.seed(0)
+#' nn<- 100
+#' test<- data.frame(idx_dt= as.Date("1970-01-01"),
+#'                   evt_dt= c(sample((-30:70), nn-1, replace= TRUE), 0) + as.Date("1970-01-01"),
+#'                   end_dt= sample((0:99), nn, replace= TRUE) + as.Date("1970-01-01")) %>%
+#'   mutate(flag= evt_dt > end_dt,
+#'          evt_dt= replace(evt_dt, flag, NA),
+#'          end_dt= replace(end_dt, !flag, NA),
+#'          patid= 1:n())
+#' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid)
+#' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid, surv_varname= c("day_dth", "dth"))
+construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= NULL, append= FALSE) {
 
   # date of origin in R:   1970-01-01
   # date of origin in SAS: 1960-01-01
@@ -14,61 +41,68 @@ construct_surv_var<- function(idx_dt, evt_dt, end_dt, surv_varname= NULL) {
   idx_dt<- enquo(idx_dt)
   evt_dt<- enquo(evt_dt)
   end_dt<- enquo(end_dt)
+  patid <- enquo(patid)
 
   if (quo_is_missing(idx_dt)) stop("No index date (time zero).")
   if (quo_is_missing(evt_dt)) stop("No event date.")
   if (quo_is_missing(end_dt)) stop("No date of the end of follow-up.")
+  if (quo_is_missing(patid))  stop("Please provide subject id")
 
-  idx_dt<- as.Date(as.character(idx_dt), origin= "1970-01-01")
-  evt_dt<- as.Date(as.character(!!evt_dt), origin= "1970-01-01")
-  end_dt<- as.Date(as.character(!!end_dt), origin= "1970-01-01")
+  tmp_df<- df %>%
+    mutate(tmp_idx_dt= as.Date(as.character(!!idx_dt), origin= "1970-01-01"),
+           tmp_evt_dt= as.Date(as.character(!!evt_dt), origin= "1970-01-01"),
+           tmp_end_dt= as.Date(as.character(!!end_dt), origin= "1970-01-01"),
+           evt       = ifelse(is.na(tmp_evt_dt), 0, 1),
+           time2evt  = as.numeric(ifelse(is.na(tmp_evt_dt),
+                                         tmp_end_dt - tmp_idx_dt,
+                                         tmp_evt_dt - tmp_idx_dt)),
+           ) %>%
+    dplyr::select(!!patid, time2evt, evt, matches("^tmp_(idx|evt|end)_dt$"))
+  # idx_dt<- as.Date(as.character(!!idx_dt), origin= "1970-01-01")
+  # evt_dt<- as.Date(as.character(!!evt_dt), origin= "1970-01-01")
+  # end_dt<- as.Date(as.character(!!end_dt), origin= "1970-01-01")
+  # evt<- ifelse(is.na(evt_dt), 0L, 1L)
+  # time2evt<- as.numeric(ifelse(is.na(evt_dt), end_dt - idx_dt, evt_dt - idx_dt))
 
-  evt<- ifelse(is.na(evt_dt), 0, 1)
-  time2evt<- ifelse(is.na(evt_dt), end_dt - idx_dt, evt_dt - idx_dt)
+  flag<- NULL
+  flag_df<- tmp_df %>%
+    filter(time2evt<=0) %>%
+    mutate(flag_evt_time_zero= (time2evt==0),
+           flag_evt_time_neg = (time2evt< 0))
 
-  if (any(time2evt==0)) {
-    time2evt<- replace(time2evt, time2evt==0, 0.5)
+  if (any(tmp_df$time2evt==0)) {
     warning("Event at time zero")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt==0, 0.5)
+    flag<- any(c(flag, TRUE))
   }
 
-  if (any(time2evt<0)) {
-    time2evt<- replace(time2evt, time2evt<0, NA)
+  if (any(tmp_df$time2evt<0)) {
     warning("Negative time-to-event!?")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
+    flag<- any(c(flag, TRUE))
   }
 
-  out<- data.frame(evt_time= time2evt, evt= evt)
-  if (!is.null(surv_varname)) names(out)<- surv_varname
+  if (flag) print(flag_df)
 
-  out
+  tmp_df<- if (is.null(surv_varname)) {
+    rename(tmp_df,
+           evt_time= time2evt)
+  } else {
+    rename(tmp_df,
+           !!surv_varname[1]:= time2evt,
+           !!surv_varname[2]:= evt)
+  }
+
+  if (append) {
+    df %>%
+      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
+  } else {
+    tmp_df %>%
+      dplyr::select(-matches("^tmp_(idx|evt|end)_dt$"))
+  }
+
 }
 
-# surv_var<- function(idx_dt= NULL, evt_dt= NULL, end_dt= NULL, surv_varname= NULL) {
-#   if (is.null(idx_dt)) stop("No index date (time zero).")
-#   if (is.null(evt_dt)) stop("No event date.")
-#   if (is.null(end_dt)) stop("No date of the end of follow-up.")
-#
-#   idx_dt<- as.Date(as.character(idx_dt), origin= "1970-01-01")
-#   evt_dt<- as.Date(as.character(evt_dt), origin= "1970-01-01")
-#   end_dt<- as.Date(as.character(end_dt), origin= "1970-01-01")
-#
-#   evt<- ifelse(is.na(evt_dt), 0, 1)
-#   time2evt<- ifelse(is.na(evt_dt), end_dt - idx_dt, evt_dt - idx_dt)
-#
-#   if (any(time2evt==0)) {
-#     time2evt<- replace(time2evt, time2evt==0, 0.5)
-#     warning("Event at time zero")
-#   }
-#
-#   if (any(time2evt<0)) {
-#     time2evt<- replace(time2evt, time2evt<0, NA)
-#     warning("Negative time-to-event!?")
-#   }
-#
-#   out<- data.frame(time2evt= time2evt, evt= evt)
-#   if (!is.null(surv_varname)) names(out)<- surv_varname
-#
-#   out
-# }
 
 
 # cmprisk_var<- function(idx_dt= NULL, evt_dt= NULL, cmp_evt_dt= NULL, end_dt= NULL, out_var_name= NULL) {
@@ -299,17 +333,16 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
   if (!is.null(adm_cnr_time)) {
 
     if (overwrite_var) {
-      cnr_evt_time_name<- quo_name(evt_time)
-      cnr_evt_name     <- quo_name(evt)
+      cnr_evt_time_name<- as_name(evt_time)
+      cnr_evt_name     <- as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(quo_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(quo_name(evt), "_adm")
+      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(as_name(evt), "_adm")
     }
 
     df<- df %>%
-      mutate(!!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time),
-             !!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!=0, 0),
-      )
+      mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!=0, 0),
+             !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
   }
 
   df
@@ -342,29 +375,29 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 
     if (!is.null(evt_label)) {
       df<- df %>%
-        mutate(!!quo_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+        mutate(!!as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
     }
 
   } else {
 
     if (overwrite_var) {
-      cnr_evt_time_name<- quo_name(evt_time)
-      cnr_evt_name     <- quo_name(evt)
+      cnr_evt_time_name<- as_name(evt_time)
+      cnr_evt_name     <- as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(quo_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(quo_name(evt), "_adm")
+      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(as_name(evt), "_adm")
     }
 
     df<- if (is.null(evt_label)) {
       df %>%
-        mutate(!!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time),
-               !!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0))
+        mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
+               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
     } else {
       df %>%
-        mutate(!!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time),
-               !!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
+        mutate(!!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
                                              as.integer(names(evt_label)),
-                                             labels = evt_label))
+                                             labels = evt_label),
+               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
     }
   }
 
@@ -626,8 +659,6 @@ show_surv<- function(surv_obj,
                      pvalue.pos= c("topleft", "topright", "bottomleft", "bottomright", "left", "right"),
                      plot_cdf= FALSE) {
 
-  # require(tidyverse)
-  # require(scales)
   #---- prepare survfit for plot ----
   surv_mat<- prepare_survfit(surv_obj)
 
