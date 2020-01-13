@@ -52,7 +52,7 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
     mutate(tmp_idx_dt= as.Date(as.character(!!idx_dt), origin= "1970-01-01"),
            tmp_evt_dt= as.Date(as.character(!!evt_dt), origin= "1970-01-01"),
            tmp_end_dt= as.Date(as.character(!!end_dt), origin= "1970-01-01"),
-           evt       = ifelse(is.na(tmp_evt_dt), 0, 1),
+           evt       = ifelse(is.na(tmp_evt_dt), 0L, 1L),
            time2evt  = as.numeric(ifelse(is.na(tmp_evt_dt),
                                          tmp_end_dt - tmp_idx_dt,
                                          tmp_evt_dt - tmp_idx_dt)),
@@ -64,7 +64,7 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
   # evt<- ifelse(is.na(evt_dt), 0L, 1L)
   # time2evt<- as.numeric(ifelse(is.na(evt_dt), end_dt - idx_dt, evt_dt - idx_dt))
 
-  flag<- NULL
+  flag<- FALSE
   flag_df<- tmp_df %>%
     filter(time2evt<=0) %>%
     mutate(flag_evt_time_zero= (time2evt==0),
@@ -103,6 +103,82 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
 }
 
+construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname= NULL, append= FALSE, ...) {
+  cmp_evt_dt<- enquos(...)
+  idx_dt<- enquo(idx_dt)
+  evt_dt<- enquo(evt_dt)
+  end_dt<- enquo(end_dt)
+  patid <- enquo(patid)
+
+  if (quo_is_missing(idx_dt)) stop("No index date (time zero).")
+  if (quo_is_missing(evt_dt)) stop("No event date.")
+  if (quo_is_missing(end_dt)) stop("No date of the end of follow-up.")
+  if (quo_is_missing(patid))  stop("Please provide subject id")
+
+  n_cmp_evt<- length(cmp_evt_dt)
+  # cmp_evt_desc<- names(cmp_evt_dt)
+  cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
+  evt_desc<- c('evt', cmp_evt_desc, 'censored')
+
+  tmp_df<- df %>%
+    dplyr::select(!!patid, !!idx_dt, !!evt_dt, !!!cmp_evt_dt, !!end_dt) %>%
+    group_by(!!patid) %>%
+    mutate(first_evt= ifelse(is_empty(evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))]),
+                             NA, evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))]),
+           first_evt_dt= pmin(!!evt_dt, !!!cmp_evt_dt, !!end_dt, na.rm= TRUE),
+
+           time2evt= case_when(
+             is.infinite(first_evt_dt) | is.na(first_evt_dt) ~ NA_real_,
+             TRUE ~ as.numeric(first_evt_dt - !!idx_dt)
+           ),
+
+           evt= case_when(
+             is.na(time2evt) ~ NA_integer_,
+             first_evt=='censored' ~ 0L,
+             first_evt=='evt' ~ 1L,
+             TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))
+           )
+    )
+
+  flag<- FALSE
+  flag_df<- tmp_df %>%
+    filter(time2evt<=0) %>%
+    mutate(flag_evt_time_zero= (time2evt==0),
+           flag_evt_time_neg = (time2evt< 0))
+
+  if (any(tmp_df$time2evt==0)) {
+    warning("Event at time zero")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt==0, 0.5)
+    flag<- any(c(flag, TRUE))
+  }
+
+  if (any(tmp_df$time2evt<0)) {
+    warning("Negative time-to-event!?")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
+    flag<- any(c(flag, TRUE))
+  }
+
+  if (flag) print(flag_df)
+
+
+  tmp_df<- if (is.null(cmprisk_varname)) {
+    tmp_df %>%
+      rename(evt_time= time2evt)
+  } else {
+    tmp_df %>%
+      rename(!!cmprisk_varname[1]:= time2evt,
+             !!cmprisk_varname[2]:= evt)
+  }
+
+  tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
+  if (!append) tmp_df else {
+    df %>%
+      inner_join(tmp_df, by= as_name(patid))
+  }
+
+}
+# debug(construct_cmprisk_var)
+# construct_cmprisk_var(df= test, patid= patid, idx_dt= idx_dt, evt_dt= evt1_dt, evt2_dt= evt2_dt, evt3_dt= evt3_dt, end_dt= end_dt)
 
 
 # cmprisk_var<- function(idx_dt= NULL, evt_dt= NULL, cmp_evt_dt= NULL, end_dt= NULL, out_var_name= NULL) {
