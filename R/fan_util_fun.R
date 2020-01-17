@@ -111,3 +111,541 @@ recode_missing<- function(x, na.value= NULL) {
   x
 }
 
+#' @title construct_surv_var
+#'
+#' @details
+#' The function creates time-to-event variables with the application of administrative censoring for a binary (survival) process.
+#' The newly created variables are named by the same variables names but with a suffix of '_adm' by default. The original
+#' variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
+#' it can be useful in some situations.
+#'
+#' @param df input data
+#' @param idx_dt the index date
+#' @param evt_dt the date of the event occurrence. Its value should be NA for non-event subjects.
+#' @param end_dt the date of the last follow-up
+#' @param patid the variable indicating subject/patient id
+#' @param surv_varname an option of character vector of length 2, the 1st of which is the name of the time variable; the other is the name of the event indicator.
+#' @return A data frame with patid, evt_time and evt.
+#' @example
+#' set.seed(0)
+#' nn<- 100
+#' test<- data.frame(idx_dt= as.Date("1970-01-01"),
+#'                   evt_dt= c(sample((-30:70), nn-1, replace= TRUE), 0) + as.Date("1970-01-01"),
+#'                   end_dt= sample((0:99), nn, replace= TRUE) + as.Date("1970-01-01")) %>%
+#'   mutate(flag= evt_dt > end_dt,
+#'          evt_dt= replace(evt_dt, flag, NA),
+#'          end_dt= replace(end_dt, !flag, NA),
+#'          patid= 1:n())
+#' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid)
+#' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid, surv_varname= c("day_dth", "dth"))
+construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= NULL, append= FALSE) {
+
+  # date of origin in R:   1970-01-01
+  # date of origin in SAS: 1960-01-01
+
+  ## Excel is said to use 1900-01-01 as day 1 (Windows default) or
+  ## 1904-01-01 as day 0 (Mac default), but this is complicated by Excel
+  ## thinking 1900 was a leap year.
+  ## So for recent dates from Windows Excel
+  #       as.Date(35981, origin="1899-12-30") # 1998-07-05
+  ## and Mac Excel
+  #       as.Date(34519, origin="1904-01-01") # 1998-07-05
+
+  idx_dt<- enquo(idx_dt)
+  evt_dt<- enquo(evt_dt)
+  end_dt<- enquo(end_dt)
+  patid <- enquo(patid)
+
+  if (quo_is_missing(idx_dt)) stop("No index date (time zero).")
+  if (quo_is_missing(evt_dt)) stop("No event date.")
+  if (quo_is_missing(end_dt)) stop("No date of the end of follow-up.")
+  if (quo_is_missing(patid))  stop("Please provide subject id")
+
+  tmp_df<- df %>%
+    mutate(tmp_idx_dt= as.Date(as.character(!!idx_dt), origin= "1970-01-01"),
+           tmp_evt_dt= as.Date(as.character(!!evt_dt), origin= "1970-01-01"),
+           tmp_end_dt= as.Date(as.character(!!end_dt), origin= "1970-01-01"),
+           evt       = ifelse(is.na(tmp_evt_dt), 0L, 1L),
+           time2evt  = as.numeric(ifelse(is.na(tmp_evt_dt),
+                                         tmp_end_dt - tmp_idx_dt,
+                                         tmp_evt_dt - tmp_idx_dt)),
+    ) %>%
+    dplyr::select(!!patid, time2evt, evt, matches("^tmp_(idx|evt|end)_dt$"))
+
+  flag<- FALSE
+  flag_df<- tmp_df %>%
+    filter(time2evt<=0) %>%
+    mutate(flag_evt_time_zero= (time2evt==0),
+           flag_evt_time_neg = (time2evt< 0))
+
+  if (any(tmp_df$time2evt==0)) {
+    warning("Event at time zero")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt==0, 0.5)
+    flag<- TRUE
+  }
+
+  if (any(tmp_df$time2evt<0)) {
+    warning("Negative time-to-event!?")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
+    flag<- TRUE
+  }
+
+  if (flag) print(flag_df)
+
+  tmp_df<- if (is.null(surv_varname)) {
+    rename(tmp_df,
+           evt_time= time2evt)
+  } else {
+    rename(tmp_df,
+           !!surv_varname[1]:= time2evt,
+           !!surv_varname[2]:= evt)
+  }
+
+  if (append) {
+    df %>%
+      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
+  } else {
+    tmp_df %>%
+      dplyr::select(-matches("^tmp_(idx|evt|end)_dt$"))
+  }
+
+}
+
+construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname= NULL, append= FALSE, ...) {
+  patid <- enquo(patid)
+  idx_dt<- enquo(idx_dt)
+  evt_dt<- enquo(evt_dt)
+  end_dt<- enquo(end_dt)
+  cmp_evt_dt<- enquos(...)
+
+  if (quo_is_missing(idx_dt)) stop("No index date (time zero).")
+  if (quo_is_missing(evt_dt)) stop("No event date.")
+  if (quo_is_missing(end_dt)) stop("No date of the end of follow-up.")
+  if (quo_is_missing(patid))  stop("Please provide subject id")
+
+  n_cmp_evt<- length(cmp_evt_dt)
+  names(cmp_evt_dt)<- sapply(cmp_evt_dt, as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
+
+  cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
+  evt_desc<- c('evt', cmp_evt_desc, 'censored')
+
+  tmp_df<- df %>%
+    dplyr::select(!!patid, !!idx_dt, !!evt_dt, !!!cmp_evt_dt, !!end_dt) %>%
+    group_by(!!patid) %>%
+    # mutate(first_evt_dt= pmin(!!evt_dt, !!!cmp_evt_dt, !!end_dt, na.rm= TRUE))
+    mutate(first_evt= ifelse(is_empty((evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))])),
+                             NA, (evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))])),
+           first_evt_dt= pmin(!!evt_dt, !!!cmp_evt_dt, !!end_dt, na.rm= TRUE),
+
+           time2evt= case_when(
+             is.infinite(first_evt_dt) | is.na(first_evt_dt) ~ NA_real_,
+             TRUE ~ as.numeric(first_evt_dt - !!idx_dt)),
+
+           evt= case_when(
+             is.na(time2evt) ~ NA_integer_,
+             first_evt=='censored' ~ 0L,
+             first_evt=='evt' ~ 1L,
+             TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
+    )
+
+  flag<- FALSE
+  flag_df<- tmp_df %>%
+    filter(time2evt<=0) %>%
+    mutate(flag_evt_time_zero= (time2evt==0),
+           flag_evt_time_neg = (time2evt< 0))
+
+  if (any(tmp_df$time2evt==0)) {
+    warning("Event at time zero")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt==0, 0.5)
+    flag<- TRUE
+  }
+
+  if (any(tmp_df$time2evt<0)) {
+    warning("Negative time-to-event!?")
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
+    flag<- TRUE
+  }
+
+  if (flag) print(flag_df)
+
+  tmp_df<- if (is.null(cmprisk_varname)) {
+    tmp_df %>%
+      rename(evt_time= time2evt)
+  } else {
+    tmp_df %>%
+      rename(!!cmprisk_varname[1]:= time2evt,
+             !!cmprisk_varname[2]:= evt)
+  }
+
+  tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
+  if (!append) tmp_df else {
+    df %>%
+      inner_join(tmp_df, by= as_name(patid))
+  }
+}
+# debug(construct_cmprisk_var)
+# onstruct_cmprisk_var(df= test,
+#                      patid= patid,
+#                      idx_dt= idx_dt,
+#                      evt_dt= evt1_dt,
+#                      dth_dt= evt2_dt,
+#                      rec_dt= evt3_dt,
+#                      end_dt= end_dt,
+#                      cmprisk_varname = c('day_evt', 'status'),
+#                      append = FALSE)
+
+
+#' @title admin_censor_surv
+#'
+#' @details
+#' The function creates time-to-event variables with the application of administrative censoring for a binary (survival) process.
+#' The newly created variables are named by the same variables names but with a suffix of '_adm' by default. The original
+#' variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
+#' it can be useful in some situations.
+#'
+#' @param df input data
+#' @param evt_time a numeric vector recording the time points at which the event occurs.
+#' @param evt an integer vector indicating right censoring (0= censored; 1= event).
+#' @param adm_cnr_time a numeric scalar specifying the time point at which administrative censoring is applied.
+#' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @return The input data plus censored time-to-event variables.
+#' @example
+#' aml %>% admin_censor_surv(evt_time= time, evt= status) # No admin censoring
+#' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
+#' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
+admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_var= FALSE) {
+  ######################################################################################
+  ## the function creates administrately censored version of event time and indicator ##
+  ## for survival (binary) process                                                    ##
+  ##   df - input dataframe                                                           ##
+  ##   evt_time - continuous time to event                                            ##
+  ##   evt - event indicator (1= event; 0= non-event)                                 ##
+  ##   adm_cnr_time - time at which admin censoring is applied                        ##
+  ######################################################################################
+
+  evt_time<- enquo(evt_time)
+  evt     <- enquo(evt)
+
+  if (!is.null(adm_cnr_time)) {
+
+    if (overwrite_var) {
+      cnr_evt_time_name<- as_name(evt_time)
+      cnr_evt_name     <- as_name(evt)
+    } else {
+      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(as_name(evt), "_adm")
+    }
+
+    df<- df %>%
+      mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!=0, 0),
+             !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
+  }
+
+  df
+}
+
+#' @title admin_censor_cmprisk
+#'
+#' @details
+#' The function creates time-to-event variables with the application of administrative censoring for a competing risk
+#' analysis. The newly created variables are named by the same variables names but with a suffix of '_adm' by default.
+#' The original variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is
+#' not recommended, but it can be useful in some situation.
+#'
+#' @param df input data
+#' @param evt_time a numeric vector recording the time points at which the event occurs.
+#' @param evt an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param adm_cnr_time a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param evt_label a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @return The input data plus censored time-to-event variables.
+#' @example
+#' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
+#' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label= NULL, overwrite_var= FALSE) {
+
+  evt_time<- enquo(evt_time)
+  evt<- enquo(evt)
+
+  if (is.null(adm_cnr_time)) {
+
+    if (!is.null(evt_label)) {
+      df<- df %>%
+        mutate(!!as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+    }
+
+  } else {
+
+    if (overwrite_var) {
+      cnr_evt_time_name<- as_name(evt_time)
+      cnr_evt_name     <- as_name(evt)
+    } else {
+      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(as_name(evt), "_adm")
+    }
+
+    df<- if (is.null(evt_label)) {
+      df %>%
+        mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
+               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
+    } else {
+      df %>%
+        mutate(!!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
+                                             as.integer(names(evt_label)),
+                                             labels = evt_label),
+               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
+    }
+  }
+
+  df<- if (overwrite_var | is.null(evt_label)) df else mutate(df,
+                                                              !!quo_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+  df
+}
+
+
+summarize_km<- function(fit, times= NULL) {
+  ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
+  # colnames(ss$pstate)<- colnames(ss$lower)<- colnames(ss$upper)<- replace(ss$state, sapply(ss$states, nchar)==0, "0")
+  # if (is.null(ss$prev)) ss$prev<- ss$pstate
+
+  out<- if (any(names(fit)=="strata")) {
+
+    ss %$%
+      map2(.x= c('surv', 'conf.low', 'conf.high'),
+           .y= list(surv= surv, lower= lower, upper= upper),
+           .f= function(var, mat, ...) {
+             mat %>%
+               as.data.frame() %>%
+               mutate(strata= strata,
+                      times = time) %>%
+               melt(id.vars= c('strata', 'times'),
+                    value.name = var) %>%
+               dplyr::select(-variable)
+           }) %>%
+      reduce(full_join, by = c('strata', 'times')) %>%
+      mutate_at(vars(one_of('surv', 'conf.low', 'conf.high')),
+                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
+      mutate(stat= paste0(surv, " [", conf.low, ", ", conf.high, "]")) %>%
+      dcast(times ~ strata, value.var = 'stat')
+
+  } else {
+
+    ss %$%
+      map2(.x= c('surv', 'conf.low', 'conf.high'),
+           .y= list(surv= surv, lower= lower, upper= upper),
+           .f= function(var, mat, ...) {
+             mat %>%
+               as.data.frame() %>%
+               mutate(times = time) %>%
+               melt(id.vars= c('times'),
+                    value.name = var) %>%
+               dplyr::select(-variable)
+           }) %>%
+      reduce(full_join, by = c('times')) %>%
+      mutate_at(vars(one_of('surv', 'conf.low', 'conf.high')),
+                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
+      mutate(stat= paste0(surv, " [", conf.low, ", ", conf.high, "]")) %>%
+      dcast(times ~ 'Overall', value.var = 'stat')
+
+  }
+  out
+}
+
+summarize_cif<- function(fit, times= NULL) {
+  ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
+  colnames(ss$pstate)<- colnames(ss$lower)<- colnames(ss$upper)<- replace(ss$state, sapply(ss$states, nchar)==0, "0")
+  # if (is.null(ss$prev)) ss$prev<- ss$pstate
+
+  out<- if (any(names(fit)=="strata")) {
+
+    ss %$%
+      map2(.x= c('pstate', 'conf.low', 'conf.high'),
+           .y= list(pstate= pstate, lower= lower, upper= upper),
+           .f= function(var, mat, ...) {
+             mat %>%
+               as.data.frame() %>%
+               mutate(strata= strata,
+                      times = time) %>%
+               melt(id.vars= c('strata', 'times'),
+                    value.name = var,
+                    variable.name = 'states')
+           }) %>%
+      reduce(full_join, by = c('strata', 'times', 'states')) %>%
+      mutate_at(vars(one_of('pstate', 'conf.low', 'conf.high')),
+                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
+      mutate(stat= paste0(pstate, " [", conf.low, ", ", conf.high, "]")) %>%
+      dcast(times ~ states + strata, value.var = 'stat')
+
+  } else {
+
+    ss %$%
+      map2(.x= c('pstate', 'conf.low', 'conf.high'),
+           .y= list(pstate= pstate, lower= lower, upper= upper),
+           .f= function(var, mat, ...) {
+             mat %>%
+               as.data.frame() %>%
+               mutate(times = time) %>%
+               melt(id.vars= c('times'),
+                    value.name = var,
+                    variable.name = 'states')
+           }) %>%
+      reduce(full_join, by = c('times', 'states')) %>%
+      mutate_at(vars(one_of('pstate', 'conf.low', 'conf.high')),
+                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
+      mutate(stat= paste0(pstate, " [", conf.low, ", ", conf.high, "]")) %>%
+      dcast(times ~ states, value.var = 'stat')
+  }
+  out
+}
+
+
+summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
+  # require(magrittr); require(tidyverse); require(survival)
+
+  if (!any(class(mdl) %in% c("coxph", "coxph.penal"))) stop("Not a coxph or coxph.penal object.")
+
+  out<- summary(mdl, maxlabel= maxlabel)$coefficient %>%
+    as.data.frame() %>%
+    rownames_to_column("term")
+
+  if (any(class(mdl)== "coxph.penal")) {
+    out<- rename(out, se= 'se(coef)')
+  } else if (all(class(mdl)== "coxph")) {
+    out<- rename(out, se= 'se(coef)', p= 'Pr(>|z|)')
+    # names(out)[grep("^p", names(out), ignore.case = TRUE)]<- "p"
+  }
+
+  out<- out %>%
+    mutate(conf.low = coef - qnorm(1-alpha/2) * se,
+           conf.high= coef + qnorm(1-alpha/2) * se,
+           coef     = if (exponentiate) exp(coef) else coef,
+           conf.low = if (exponentiate) exp(conf.low) else conf.low,
+           conf.high= if (exponentiate) exp(conf.high) else conf.high,
+           stat= ifelse(is.na(coef), NA_character_,
+                        paste0(formatC(coef, format= "f", digits= 3, flag= "#"), " [",
+                               formatC(conf.low, format= "f", digits= 3, flag= "#"), ", ",
+                               formatC(conf.high, format= "f", digits= 3, flag= "#"), "]")),
+           pval= format_pvalue(p)) %>%
+    select_(.dots= c("term", "stat", "pval"))
+
+  type3_coxph<- function(mdl, beta_var= vcov(mdl)) {
+    x<- model.matrix(mdl)
+    varseq <- attr(x, "assign")
+    out<- lapply(#seq_len(max(varseq)),
+      unique(varseq),
+      function(i){
+        df<- sum(varseq==i)
+        # set out the contrast matrix
+        L<- matrix(0, nrow= df, ncol= ncol(x))
+        L[, varseq==i]<- diag(df)
+
+        #
+        vv<- L %*% beta_var %*% t(L)
+        cc<- L %*% coef(mdl)
+
+        # calcualte Wald's test statistics and p-value
+        wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )
+        pval<- pchisq(wald_stat,
+                      df= if (any(class(mdl)=="coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
+                      lower.tail = FALSE)
+
+        data.frame(df= round(df, 0), stat= wald_stat, chisq_p= pval)
+      })
+    out<- do.call(rbind, out)
+    # out<- cbind(variable= attr(mdl$terms, "term.labels"), out)
+
+    term_excld<- attr(mdl$terms, "response")
+    term_excld<- if (!is.null(attr(mdl$terms, "specials"))) c(term_excld, unlist(attr(mdl$terms, "specials")[c("strata", "cluster")]))
+    out<- cbind(variable= names(attr(mdl$terms, "dataClasses"))[-term_excld],
+                out, stringsAsFactors= FALSE)
+
+    out
+  }
+
+  type3_out<- type3_coxph(mdl)
+
+  out<- type3_out %>%
+    filter(df> 1) %>%
+    mutate(pval= format.pvalue(chisq_p)) %>%
+    dplyr::select(variable, pval) %>%
+    rename(term= variable) %>%
+    bind_rows(out) %>%
+    arrange(term) %>%
+    dplyr::select(term, stat, pval)
+
+  out
+}
+
+
+summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE) {
+
+  cox_out<- summary(pool(cox_mira)) %>%
+    as.data.frame() %>%
+    rownames_to_column("var")
+  cox_out<- cox_out[c("var", "est", 'lo 95', 'hi 95', 'Pr(>|t|)')]
+  names(cox_out)<- c("var", "est", "conf.low", "conf.high", "pval")
+  cox_out<- cox_out %>%
+    mutate(est= if (exponentiate) exp(est) else est,
+           conf.low= if (exponentiate) exp(conf.low) else conf.low,
+           conf.high= if (exponentiate) exp(conf.high) else conf.high,
+           stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
+                         formatC(conf.low,  digits = 3, format= "f", flag= "#"), ", ",
+                         formatC(conf.high, digits = 3, format= "f", flag= "#"), "]"),
+           pval= format.pvalue(pval)) %>%
+    dplyr::select(var, stat, pval, everything())
+
+  # to calulate the type 3 error
+  # Li, Meng, Raghunathan and Rubin. Significance levels from repated p-values with multiply-imputed data. Statistica Sinica (1991)
+  x<- model.matrix(cox_mira$analyses[[1]])
+  varseq<- attr(x, "assign")
+  df<- sapply(split(varseq, varseq), length)
+  m <- length(cox_mira$analyses)
+
+  # coef estimate and its vcov for each MI model
+  betas<- mitools::MIextract(cox_mira$analyses, fun= coef)
+  vars <- mitools::MIextract(cox_mira$analyses, fun= vcov)
+
+  # average betas and vcov cross MI mdls
+  mean_betas<- purrr::reduce(betas, .f= `+`)/m
+  with_var<- purrr::reduce(vars, .f= `+`)/m # with MI
+  # between-MI vcov
+  btwn_var<- lapply(betas, function(cc) (cc - mean_betas) %*% t(cc - mean_betas)) %>%
+    purrr::reduce(.f= `+`)/(m-1)
+
+  out<- lapply(unique(varseq),
+               function(i){
+                 df<- sum(varseq==i)
+                 # set out the contrast matrix
+                 L<- matrix(0, nrow= df, ncol= ncol(x))
+                 L[, varseq==i]<- diag(df)
+
+                 cc<- L %*% mean_betas
+                 vv<- L %*% with_var %*% t(L) # with-mi vcov for beta
+                 v2<- L %*% btwn_var %*% t(L) # btwn-mi vcov for beta
+
+                 # calcualte Wald's test statistics and p-value
+                 rm<- (1 + 1/m) * sum(diag(v2 %*% solve(vv))) # eqn (1.18) without dividing by k
+                 wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )/(df + rm) # eqn (1.17)
+                 # expr (1.19)
+                 nu<- df * (m-1)
+                 df_denominator<- if (nu> 4) {
+                   4 + (nu-4)*(1 + (1-2/nu)/(rm/df))^2
+                 } else {
+                   0.5*(m-1)*(df+1)*(1+1/(rm/df))^2
+                 }
+
+                 pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
+
+                 data.frame(df= round(df, 0),
+                            stat= wald_stat,
+                            chisq_p= pval)
+               })
+  names(out)<- attr(cox_mira$analyses[[1]]$terms, "term.labels")[unique(varseq)]
+
+  type3_out<- plyr::ldply(out, .id= "var") %>%
+    mutate(pval= format.pvalue(chisq_p)) %>%
+    filter(df>1) %>%
+    dplyr::select(var, pval)
+
+  bind_rows(cox_out, type3_out) %>% arrange(var)
+}
