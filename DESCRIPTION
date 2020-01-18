@@ -6,7 +6,7 @@ Author: Chun-Po Steve Fan
 Maintainer: Steve Fan <steve.fan@sickkids.ca>
 Description: Miscellaneous functions that Steve wrote to facilitate CVDMC data analysis project.
 Depends: magrittr, tidyverse, rlang, forcats, lubridate, reshape2, Hmisc, survival, cmprsk, broom, openxlsx, mice, grid, gridExtra, extrafont, viridis
-Suggests: splines, mitools, purrr
+Suggests: splines, mitools, purrr, scales
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
