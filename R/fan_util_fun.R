@@ -203,7 +203,7 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
   if (append) {
     df %>%
-      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
+      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= lazyeval::as_name(patid))
   } else {
     tmp_df %>%
       dplyr::select(-matches("^tmp_(idx|evt|end)_dt$"))
@@ -224,7 +224,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   if (quo_is_missing(patid))  stop("Please provide subject id")
 
   n_cmp_evt<- length(cmp_evt_dt)
-  names(cmp_evt_dt)<- sapply(cmp_evt_dt, as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
+  names(cmp_evt_dt)<- sapply(cmp_evt_dt, lazyeval::as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
 
   cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
   evt_desc<- c('evt', cmp_evt_desc, 'censored')
@@ -280,7 +280,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
   if (!append) tmp_df else {
     df %>%
-      inner_join(tmp_df, by= as_name(patid))
+      inner_join(tmp_df, by= lazyeval::as_name(patid))
   }
 }
 # debug(construct_cmprisk_var)
@@ -329,11 +329,11 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
   if (!is.null(adm_cnr_time)) {
 
     if (overwrite_var) {
-      cnr_evt_time_name<- as_name(evt_time)
-      cnr_evt_name     <- as_name(evt)
+      cnr_evt_time_name<- lazyeval::as_name(evt_time)
+      cnr_evt_name     <- lazyeval::as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(as_name(evt), "_adm")
+      cnr_evt_time_name<- paste0(lazyeval::as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(lazyeval::as_name(evt), "_adm")
     }
 
     df<- df %>%
@@ -371,17 +371,17 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 
     if (!is.null(evt_label)) {
       df<- df %>%
-        mutate(!!as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+        mutate(!!lazyeval::as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
     }
 
   } else {
 
     if (overwrite_var) {
-      cnr_evt_time_name<- as_name(evt_time)
-      cnr_evt_name     <- as_name(evt)
+      cnr_evt_time_name<- lazyeval::as_name(evt_time)
+      cnr_evt_name     <- lazyeval::as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(as_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(as_name(evt), "_adm")
+      cnr_evt_time_name<- paste0(lazyeval::as_name(evt_time), "_adm")
+      cnr_evt_name     <- paste0(lazyeval::as_name(evt), "_adm")
     }
 
     df<- if (is.null(evt_label)) {
@@ -405,8 +405,6 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 
 summarize_km<- function(fit, times= NULL) {
   ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
-  # colnames(ss$pstate)<- colnames(ss$lower)<- colnames(ss$upper)<- replace(ss$state, sapply(ss$states, nchar)==0, "0")
-  # if (is.null(ss$prev)) ss$prev<- ss$pstate
 
   out<- if (any(names(fit)=="strata")) {
 
@@ -500,7 +498,6 @@ summarize_cif<- function(fit, times= NULL) {
 
 
 summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
-  # require(magrittr); require(tidyverse); require(survival)
 
   if (!any(class(mdl) %in% c("coxph", "coxph.penal"))) stop("Not a coxph or coxph.penal object.")
 
@@ -531,26 +528,25 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
   type3_coxph<- function(mdl, beta_var= vcov(mdl)) {
     x<- model.matrix(mdl)
     varseq <- attr(x, "assign")
-    out<- lapply(#seq_len(max(varseq)),
-      unique(varseq),
-      function(i){
-        df<- sum(varseq==i)
-        # set out the contrast matrix
-        L<- matrix(0, nrow= df, ncol= ncol(x))
-        L[, varseq==i]<- diag(df)
+    out<- lapply(unique(varseq),
+                 function(i){
+                   df<- sum(varseq==i)
+                   # set out the contrast matrix
+                   L<- matrix(0, nrow= df, ncol= ncol(x))
+                   L[, varseq==i]<- diag(df)
 
-        #
-        vv<- L %*% beta_var %*% t(L)
-        cc<- L %*% coef(mdl)
+                   #
+                   vv<- L %*% beta_var %*% t(L)
+                   cc<- L %*% coef(mdl)
 
-        # calcualte Wald's test statistics and p-value
-        wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )
-        pval<- pchisq(wald_stat,
-                      df= if (any(class(mdl)=="coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
-                      lower.tail = FALSE)
+                   # calcualte Wald's test statistics and p-value
+                   wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )
+                   pval<- pchisq(wald_stat,
+                                 df= if (any(class(mdl)=="coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
+                                 lower.tail = FALSE)
 
-        data.frame(df= round(df, 0), stat= wald_stat, chisq_p= pval)
-      })
+                   data.frame(df= round(df, 0), stat= wald_stat, chisq_p= pval)
+                 })
     out<- do.call(rbind, out)
     # out<- cbind(variable= attr(mdl$terms, "term.labels"), out)
 

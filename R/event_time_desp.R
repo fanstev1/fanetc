@@ -25,14 +25,13 @@ extract_atrisk<- function(fit, time.list, time.scale= 1) {
                                      approxfun(x= time, y= n.risk, method= "constant", rule = 2:1, f= 1)
                     )
     )
-    # atRisk<- lapply(split(x, x$strata),
-    #                 function(x) with(x, stepfun(x= time, y= c(n.risk, 0), f= 1, right= TRUE)))
-    # function(x) stepfun(x= x$time[-1], y= x$n.risk, right= FALSE))
+
     atRiskPts<- rapply(atRisk,
                        function(x) {
                          out<- x(time.list)
                          replace(out, is.na(out), 0)
-                       }, how = "unlist")
+                       },
+                       how = "unlist")
     atRiskPts<-  matrix(atRiskPts, nrow= length(time.list), byrow= FALSE)
     rownames(atRiskPts)<- time.list
     colnames(atRiskPts)<- strata_lab
@@ -41,28 +40,16 @@ extract_atrisk<- function(fit, time.list, time.scale= 1) {
       # rownames_to_column("time") %>%
       mutate(time= time.list) %>%
       dplyr::select(time, everything())
-    # atRiskPts<- matrix(atRiskPts, ncol= length(time.list), byrow= TRUE)
-    # rownames(atRiskPts)<- names(fit$strata)
-    # rownames(atRisk)
-    # atRiskPts<- rbind(time= time.list, atRiskPts)
   }
   else {
     x<- data.frame(time = fit$time/time.scale,
                    n.risk=  if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
                    strata= factor(1, 1, labels = "Overall"))
 
-    # x<- with(fit, data.frame(time = time/time.scale,
-    #                          n.risk=  with(fit, if (is.matrix(n.risk)) apply(n.risk, 1, sum) else n.risk)
-    # )
-    # )
-    # atRisk<- with(x, stepfun(x= time, y= c(n.risk, 0), f= 1, right= TRUE))
-    # atRisk<- with(x, approxfun(x= time, y= n.risk, method= "constant", rule = 2:1, f= 1))
     # Steve note: have to fix the following line `rule` for data with delayed entries.
     # approxfun(x= time, y= n.risk, method= "constant", rule = 1:1, f= 1)
     atRisk<- with(x, approxfun(x= time, y= n.risk, method= "constant", rule = 2:1, f= 1))
     atRiskPts<- atRisk(time.list)
-    # atRiskPts<- rbind(time.list, atRiskPts)
-    # atRiskPts<- rbind(time.list, replace(atRiskPts, is.na(atRiskPts), 0))
     atRiskPts<- data.frame(time= time.list, Overall= as.integer(atRiskPts))
   }
   return(atRiskPts)
@@ -122,9 +109,10 @@ prepare_survfit<- function(surv_obj) {
                prob     = surv_obj$surv,
                conf_low = surv_obj$lower,
                conf_high= surv_obj$upper,
+
+               n_risk   = surv_obj$n.risk, # immediately before time t
                n_event  = surv_obj$n.event,
-               n_censor = surv_obj$n.censor,
-               n_risk   = surv_obj$n.risk)
+               n_censor = surv_obj$n.censor)
   }
 
 
@@ -153,7 +141,13 @@ prepare_survfit<- function(surv_obj) {
       prepare_surv() %>%
       group_by(strata) %>%
       nest() %>%
-      mutate(plot_prob_d= map(data,
+      mutate(data= map(data,
+                       function(df) {
+                         remove<- duplicated(df$prob)
+                         if (remove[length(remove)]) remove[length(remove)]<- FALSE
+                         df[!remove,]
+                       }),
+             plot_prob_d= map(data,
                               function(df) {
                                 df %>%
                                   dplyr::select(one_of("time", "prob")) %>%
@@ -183,7 +177,7 @@ prepare_survfit<- function(surv_obj) {
 add_atrisk<- function(p, surv_obj, x_break= NULL) {
 
   #---- get parameters required for where to include the at-risk table ----#
-  atrisk_y_pos<- -0.225 * diff(layer_scales(p)$y$range$range)
+  atrisk_y_pos<- -0.225 * max(diff(layer_scales(p)$y$range$range), diff(p$coordinates$limits$y))
   x_break     <- if (is.null(x_break)) {
     layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
   } else {
@@ -317,10 +311,64 @@ run_logrank_test<- function(surv_obj) {
   pval
 }
 
+#' @title show_surv
+#'
+#' @details
+#' The function shows the survival function with and without strata.
+#'
+#' @param surv_obj a numeric vector recording the time points at which the event occurs.
+#' @param x_lab an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param y_lab a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param x_lim a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param y_lim a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param color_list input data
+#' @param plot_theme a numeric vector recording the time points at which the event occurs.
+#' @param add_ci an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param add_atrisk a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param add_legend a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param add_pvalue a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param pvalue_pos a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @return A ggplot object.
+#' @example
+#' my_plot_theme<- theme_bw() +
+#' theme(axis.title  = element_text(size= 14, family="Arial"),
+#'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
+#'       axis.title.y= element_text(margin= unit(c(t= 0, r = 1, b = 0, l = 0), "lines"), family="Arial"),
+#'       axis.text   = element_text(size= 12, family="Arial"),
+#'       # set the axis line (i.e. bty= "l" in traditional plot)
+#'       axis.line.x = element_line(color="black", size = 1),
+#'       axis.line.y = element_line(color="black", size = 1),
+#'
+#'       # specify the legend (e.g. position, color, justification)
+#'       legend.title= element_blank(),
+#'       legend.background= element_rect(fill= "transparent"),
+#'       legend.text      = element_text(family= "Arial", size = 12),
+#'       legend.margin    = margin(t = 0, r = 0, b = 0, l = 0,"bigpts"),
+#'       legend.key       = element_rect(fill= "transparent", color= "transparent", linetype= "blank"),
+#'       legend.key.size  = unit(24, "bigpts"),
+#'       # legend.position= c(0.98, 0.02),
+#'       # legend.justification= c(1, 0),
+#'
+#'       #eliminates background, gridlines, and chart border
+#'       panel.border = element_blank(),
+#'       # plot.background = element_blank(),
+#'       # panel.grid.major = element_blank(),
+#'       panel.grid.minor = element_blank(),
+#'       panel.spacing = unit(1, "lines"),
+#'
+#'       strip.background = element_rect(fill = "black", color= "white"),
+#'       strip.text = element_text(family = "Arial", color= "white", size = 12, face= "bold"),
+#'
+#'       # plot margin. Sufficient margins must be specified for printing at-risk patients.
+#'       plot.margin= unit(c(top= 0.1, right= 0.05, bottom= .3, left= .2), "npc"))
+#'
+#' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
+#' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
 show_surv<- function(surv_obj,
-                     x_lab= NULL,
-                     y_lab= NULL,
-                     x_lim= NULL,
+                     x_lab= 'Time',
+                     y_lab= if (plot_cdf) 'The proportion of deceased subjects' else 'The freedom from death',
+                     # x_lim= NULL,
                      y_lim= NULL,
                      x_break= NULL,
                      y_break= NULL,
@@ -338,18 +386,8 @@ show_surv<- function(surv_obj,
   color_scheme<- match.arg(color_scheme)
   if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
 
-  #---- prepare survfit for plot ----
-  surv_mat<- prepare_survfit(surv_obj)
-
-  plot_prob_d<- surv_mat %>%
-    # filter(state %in% evt_type) %>%
-    dplyr::select(strata, plot_prob_d) %>%
-    # mutate(state_label= evt_label(state)) %>%
-    unnest()
-
-  add_pvalue<- if (nlevels(plot_prob_d$strata)==1) FALSE else add_pvalue
-  add_legend<- if (nlevels(plot_prob_d$strata)==1 | add_atrisk) FALSE else add_legend
-
+  add_pvalue<- if (all(names(surv_obj)!='strata')) FALSE else add_pvalue
+  add_legend<- if (all(names(surv_obj)!='strata') | add_atrisk) FALSE else add_legend
 
   fill_fun <- switch(color_scheme,
                      'brewer' = quote(scale_fill_brewer(palette = "Set1")),
@@ -361,34 +399,66 @@ show_surv<- function(surv_obj,
                      'grey'   = quote(scale_color_grey(start= 0, end= 0.65)),
                      'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
                      'manual' = match.call(do.call, call('do.call', what= 'scale_color_manual', args= color_list)))
-  # fill_fun <- switch(color_scheme,
-  #                    'brewer' = quote(scale_fill_brewer(palette = "Set1")),
-  #                    'grey'   = quote(scale_fill_grey(start= 0, end= 0.65)),
-  #                    'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)))
-  # color_fun<- switch(color_scheme,
-  #                    'brewer' = quote(scale_color_brewer(palette = "Set1")),
-  #                    'grey'   = quote(scale_color_grey(start= 0, end= 0.65)),
-  #                    'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)))
 
+  if (!plot_cdf & !is.null(y_lim)) {
+    y_lim<- c(0, 1)
+    message("The parameter y_lim was reset to y_lim= c(0, 1) for survival function.")
+  } else if (plot_cdf & !is.null(y_lim)) {
+    y_lim<- c(0, max(y_lim, na.rm= TRUE))
+    message("The lower limit of y-axis was reset to 0 for failure function.")
+  } else if (!plot_cdf & is.null(y_lim)) {
+    y_lim<- c(0, 1)
+    message("The parameter y_lim was set to y_lim= c(0, 1) for survival function.")
+  } else if (plot_cdf & is.null(y_lim)) {
+    y_lim<- c(0, 1)
+    message("The parameter y_lim was set to y_lim= c(0, 1) for failure function.")
+  }
 
-  # x_lab<- if (is.null(x_lab)) "Time" else x_lab
-  # y_lab<- if (is.null(y_lab)) "Proportion of subjects" else y_lab
-  # x_break<- if (is.null(x_break)) scales::pretty_breaks(6) else x_break
-  # y_break<- if (is.null(y_break)) scales::pretty_breaks(6) else y_break
+  #---- prepare survfit for plot ----
+  surv_mat<- prepare_survfit(surv_obj)
+
+  plot_prob_d<- surv_mat %>%
+    dplyr::select(strata, plot_prob_d) %>%
+    unnest() %>%
+    mutate(prob= if (plot_cdf) 1-prob else prob)
+
+  if (y_lim[2]< 1) {
+    plot_prob_d<- plot_prob_d %>%
+      mutate(prob= pmin(prob, y_lim[2], na.rm= TRUE),
+             # prob= pmax(prob, min(y_lim, na.rm = TRUE), na.rm= TRUE)
+             ) %>%
+      group_by(strata)
+  }
 
   out<- ggplot() +
     geom_step(data= plot_prob_d,
               aes(x= time, y= prob, group= strata, color= strata),
               size= 1.1, show.legend = add_legend) +
     eval(color_fun) +
-    scale_x_continuous(name  = if (is.null(x_lab)) "Time" else x_lab,
+    scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
-                       expand= c(0.01, 0.005))
+                       expand= c(0.01, 0.005),
+                       labels= scales::comma)
 
   if (add_ci) {
     plot_ci_d<- surv_mat %>%
       dplyr::select(strata, plot_ci_d) %>%
       unnest()
+
+    if (plot_cdf) {
+      plot_ci_d<- plot_ci_d %>%
+        mutate_at(vars(starts_with('conf')), function(x) 1-x) %>%
+        rename(conf_high= conf_low,
+               conf_low = conf_high)
+    }
+
+    if (y_lim[2]< 1) {
+      plot_ci_d<- plot_ci_d %>%
+        filter(conf_low <= y_lim[2],
+               conf_high>= y_lim[1]) %>%
+        mutate(conf_high= replace(conf_high, conf_high> y_lim[2], y_lim[2]),
+               conf_low= replace(conf_low, conf_low< y_lim[1], y_lim[1]))
+    }
 
     out<- out +
       geom_ribbon(data= plot_ci_d,
@@ -398,28 +468,40 @@ show_surv<- function(surv_obj,
   }
 
 
-  out<- if (plot_cdf) {
-    # failure function
-    failure<- scales::trans_new(name= "failure",
-                                transform = function(x) 1-x,
-                                inverse = function(y) 1-y,
-                                breaks = scales::trans_breaks(trans= function(x) 1-x, inv= function(y) 1-y,  n=6),
-                                format = scales::percent_format())
+  # out<- if (plot_cdf) {
+  #
+  #   # failure function
+  #   failure<- scales::trans_new(name= "failure",
+  #                               transform = function(x) 1-x,
+  #                               inverse   = function(y) 1-y,
+  #                               breaks    = scales::trans_breaks(trans= function(x) 1-x, inv= function(y) 1-y,  n=6),
+  #                               format    = scales::percent)
+  #
+  #   out + scale_y_continuous(name  = y_lab,
+  #                            # name  = if (is.null(y_lab)) "Proportion of deceased subjects" else y_lab,
+  #                            breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
+  #                            expand= c(0.01, 0.005),
+  #
+  #                            trans = failure,
+  #                            labels= scales::trans_format(trans= function(x) 1- x, format = scales::percent_format()))
+  # } else {
+  #   # survival function
+  #   out + scale_y_continuous(name  = y_lab,
+  #                            # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
+  #                            breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
+  #                            expand= c(0.01, 0.005),
+  #
+  #                            labels= scales::percent)
+  # }
 
-    out + scale_y_continuous(name  = if (is.null(y_lab)) "Proportion of deceased subjects" else y_lab,
-                             breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                             expand= c(0.01, 0.005),
+  out<- out + scale_y_continuous(name  = y_lab,
+                           # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
+                           breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
+                           expand= c(0.01, 0.005),
 
-                             trans = failure,
-                             labels= scales::trans_format(trans= function(x) 1- x, format = scales::percent_format()))
-  } else {
-    # survival function
-    out + scale_y_continuous(name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
-                             breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                             expand= c(0.01, 0.005),
+                           labels= scales::percent)
 
-                             labels= scales::percent_format())
-  }
+  out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim) else out
 
   if (add_pvalue) {
     pval<- run_logrank_test(surv_obj) %>%
@@ -427,45 +509,50 @@ show_surv<- function(surv_obj,
     # pval<- format_pvalue(pval)
     pval<- ifelse(trimws(pval)=="<0.001", "Log-rank p< 0.001", paste0("Log-rank p= ", pval) )
 
+
+    y_bottom<- min(layer_scales(out)$y$range$range[1], out$coordinates$limits$y[1], na.rm= TRUE)
+    y_top   <- max(layer_scales(out)$y$range$range[2], out$coordinates$limits$y[2], na.rm= TRUE)
+    y_mid   <- (y_top + y_bottom)/2
+
     pvalue_pos<- match.arg(pvalue_pos)
     if (pvalue_pos %in% c("topleft")) {
       pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.hjust<- 0
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomleft")) {
       pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.hjust<- 0
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("left")) {
       pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- mean(layer_scales(out)$y$range$range)
+      pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
       pvalue.hjust<- 0
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("topright")) {
       pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.hjust<- 1
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomright")) {
       pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.hjust<- 1
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("right")) {
       pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- mean(layer_scales(out)$y$range$range)
+      pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
       pvalue.hjust<- 1
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("top")) {
       pvalue.x<- mean(layer_scales(out)$x$range$range)
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.hjust<- 0.5
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottom")) {
       pvalue.x<- mean(layer_scales(out)$x$range$range)
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.hjust<- 0.5
       pvalue.vjust<- 0
     } else {
@@ -491,21 +578,22 @@ show_surv<- function(surv_obj,
 
   if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break)
 
-  out<- out +
-    # facet_grid(. ~ state, labeller = labeller(state= state_label), drop= TRUE) +
-    plot_theme
+  out<- out + plot_theme
 
-  # print(out)
-  print(out, vp= viewport(width = unit(6.5, "inches"),
-                          height = unit(6.5, "inches")))
+  print(out)
+  # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
   return(out)
 }
+
+
+
+
 #' @title estimate_cif
 #'
 #' @details
 #' The function analyzes the competing data (df) using Andersen-Johansen method in estimating cumulative incidence
-#' function.The function store the input data in the call(), which can be used in
-#' run_gray_test().
+#' function.The function store the input data in the call(), which can be used in run_gray_test().
+#'
 #'
 estimate_cif<- function(df, evt_time, evt, group, ...) {
 
@@ -542,6 +630,77 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
   pval
 }
 
+#' @title show_cif
+#'
+#' @details
+#' The function shows the cumulative incidence function for competing risks with and without strata.
+#'
+#' @param surv_obj a survfitms subject.
+#' @param x_lab an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param y_lab a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param x_lim a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param y_lim a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param color_list input data
+#' @param plot_theme a numeric vector recording the time points at which the event occurs.
+#' @param add_ci an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param add_atrisk a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param add_legend a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param add_pvalue a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param pvalue_pos a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @return A ggplot object.
+#' @example
+#' my_plot_theme<- theme_bw() +
+#' theme(axis.title  = element_text(size= 14, family="Arial"),
+#'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
+#'       axis.title.y= element_text(margin= unit(c(t= 0, r = 1, b = 0, l = 0), "lines"), family="Arial"),
+#'       axis.text   = element_text(size= 12, family="Arial"),
+#'       # set the axis line (i.e. bty= "l" in traditional plot)
+#'       axis.line.x = element_line(color="black", size = 1),
+#'       axis.line.y = element_line(color="black", size = 1),
+#'
+#'       # specify the legend (e.g. position, color, justification)
+#'       legend.title= element_blank(),
+#'       legend.background= element_rect(fill= "transparent"),
+#'       legend.text      = element_text(family= "Arial", size = 12),
+#'       legend.margin    = margin(t = 0, r = 0, b = 0, l = 0,"bigpts"),
+#'       legend.key       = element_rect(fill= "transparent", color= "transparent", linetype= "blank"),
+#'       legend.key.size  = unit(24, "bigpts"),
+#'       # legend.position= c(0.98, 0.02),
+#'       # legend.justification= c(1, 0),
+#'
+#'       #eliminates background, gridlines, and chart border
+#'       panel.border = element_blank(),
+#'       # plot.background = element_blank(),
+#'       # panel.grid.major = element_blank(),
+#'       panel.grid.minor = element_blank(),
+#'       panel.spacing = unit(1, "lines"),
+#'
+#'       strip.background = element_rect(fill = "black", color= "white"),
+#'       strip.text = element_text(family = "Arial", color= "white", size = 12, face= "bold"),
+#'
+#'       # plot margin. Sufficient margins must be specified for printing at-risk patients.
+#'       plot.margin= unit(c(top= 0.1, right= 0.05, bottom= .3, left= .2), "npc"))
+#'
+#' # read in the example data
+#' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
+#' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+#' p<- cmprisk_df %>%
+#' admin_censor_cmprisk(ftime, status,
+#'                      adm_cnr_time= 30,
+#'                      overwrite_var = TRUE) %>%
+#'   estimate_cif(ftime, status) %>%
+#'   show_cif(evt_type = 1,
+#'            plot_theme= my_plot_theme,
+#'            x_break= seq(0, 10, by= 1),
+#'            y_break= seq(0, .8, by= .1),
+#'            add_pvalue = TRUE,
+#'            add_atrisk = TRUE,
+#'            add_ci = TRUE,
+#'            add_legend = FALSE,
+#'            color_scheme = "manual",
+#'            color_list = list(values= c('blue', 'blue')),
+#'            pvalue_pos= "topleft")
 show_cif<- function(surv_obj,
                     evt_type = 1,
                     evt_label= identity, # identity function
@@ -549,24 +708,26 @@ show_cif<- function(surv_obj,
                     #                                      `1`= "Event",
                     #                                      `2`= "Competing event",
                     #                                      .default= "Event free"),
-
-                    x_lab= NULL,
-                    y_lab= NULL,
-                    x_break= NULL,
-                    y_break= NULL,
-                    color_scheme= c("brewer", "grey", "viridis", "manual"),
-                    color_list= NULL, #required only if color_scheme= 'manual'. eg color_list= list(values= c('red', 'blue'))
-                    plot_theme= theme_minimal(),
-
                     add_ci= TRUE,
                     add_atrisk= TRUE,
                     add_legend= FALSE,
                     add_pvalue= TRUE,
                     pvalue_pos= c("bottomright", "topleft", "topright", "bottomleft", "left", "right", "top", "bottom"),
+
+                    plot_theme= theme_minimal(),
+                    x_lab= 'Time',
+                    y_lab= 'Proportion of subjects',
+                    x_lim= NULL,
+                    y_lim= NULL,
+                    x_break= NULL,
+                    y_break= NULL,
+                    color_scheme= c("brewer", "grey", "viridis", "manual"),
+                    color_list= NULL, #required only if color_scheme= 'manual'. eg color_list= list(values= c('red', 'blue'))
+
                     plot_cdf= FALSE) {
 
   color_scheme<- match.arg(color_scheme)
-  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
+  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
 
   #---- prepare survfit for plot ----
   cmprisk_mat<- prepare_survfit(surv_obj)
@@ -601,13 +762,18 @@ show_cif<- function(surv_obj,
               aes(x= time, y= prob, group= strata, color= strata),
               size= 1.1, show.legend = add_legend) +
     eval(color_fun) +
-    scale_x_continuous(name  = if (is.null(x_lab)) "Time" else x_lab,
+    scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
-                       expand= c(0.01, 0.005)) +
-    scale_y_continuous(name  = if (is.null(y_lab)) "Proportion of subjects" else y_lab,
+                       expand= c(0.01, 0.005),
+                       # limits = x_lim,
+                       labels= scales::comma) +
+    scale_y_continuous(name  = y_lab,
                        breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
                        expand= c(0.01, 0.005),
-                       labels= scales::percent_format())
+                       # limits= y_lim,
+                       labels= scales::percent)
+
+  out<- if (!is.null(x_lim) | !is.null(y_lim)) out + coord_cartesian(xlim= x_lim, ylim = y_lim) else out
 
   if (add_ci) {
     plot_ci_d<- cmprisk_mat %>%
@@ -692,14 +858,12 @@ show_cif<- function(surv_obj,
 
   if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break)
 
-  out<- out +
-    # facet_grid(. ~ state, labeller = labeller(state= state_label), drop= TRUE) +
-    plot_theme
+  out<- out + plot_theme
 
+  out
   # print(out)
-  print(out, vp= viewport(width = unit(6.5, "inches"),
-                          height = unit(6.5, "inches")))
-  return(out)
+  # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
+  # return(out)
 }
 
 
