@@ -23,6 +23,7 @@ factor_desp<- function(df, group, includeNA= FALSE) {
 
   output_one_way_tbl<- function(freq, pct_digits= 1) {
     pct  <- prop.table(freq)
+    var_name<- names(dimnames(freq))
     freq<- freq %>%
       addmargins() %>%
       as.data.frame(row.names= names(dimnames(.)),
@@ -44,12 +45,13 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       mutate(pct= formatC(pct*100, digits= pct_digits, format= "f")) %>%
       dplyr::select(level, pct)
 
-    full_join(freq, pct, by = c("level")) %>%
+    out<- full_join(freq, pct, by = c("level")) %>%
       mutate(stat= paste0(freq, " (", pct, "%)"),
              stat= ifelse(level=="Sum", NA_character_, stat),
              level= ifelse(level=="Sum", ".", level)) %>%
-      dplyr::select(level, n, stat) %>%
-      arrange(level)
+      dplyr::select(level, n, stat) #%>%
+      # arrange(level)
+    out[match(c('.', levels(df[[var_name]])), out$level),]
   }
 
   output_two_way_tbl<- function(freq, pct_digits= 1) {
@@ -84,7 +86,8 @@ factor_desp<- function(df, group, includeNA= FALSE) {
 
     names(out)[1]<- names(total)[1]<- "level"
     out<- full_join(total, out, by= "level", suffix= c("_n", "_stat"))
-    out
+    out[match(c('.', levels(df[[tbl_var_name[1]]])), out$level),]
+    # out
   }
   ##
 
