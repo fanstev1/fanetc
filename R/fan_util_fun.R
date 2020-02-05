@@ -409,7 +409,7 @@ summarize_km<- function(fit, times= NULL) {
   out<- if (any(names(fit)=="strata")) {
 
     ss %$%
-      map2(.x= c('surv', 'conf.low', 'conf.high'),
+      map2(.x= c('surv', 'conf_low', 'conf_high'),
            .y= list(surv= surv, lower= lower, upper= upper),
            .f= function(var, mat, ...) {
              mat %>%
@@ -421,15 +421,15 @@ summarize_km<- function(fit, times= NULL) {
                dplyr::select(-variable)
            }) %>%
       reduce(full_join, by = c('strata', 'times')) %>%
-      mutate_at(vars(one_of('surv', 'conf.low', 'conf.high')),
+      mutate_at(vars(one_of('surv', 'conf_low', 'conf_high')),
                 function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(surv, " [", conf.low, ", ", conf.high, "]")) %>%
+      mutate(stat= paste0(surv, " [", conf_low, ", ", conf_high, "]")) %>%
       dcast(times ~ strata, value.var = 'stat')
 
   } else {
 
     ss %$%
-      map2(.x= c('surv', 'conf.low', 'conf.high'),
+      map2(.x= c('surv', 'conf_low', 'conf_high'),
            .y= list(surv= surv, lower= lower, upper= upper),
            .f= function(var, mat, ...) {
              mat %>%
@@ -440,9 +440,9 @@ summarize_km<- function(fit, times= NULL) {
                dplyr::select(-variable)
            }) %>%
       reduce(full_join, by = c('times')) %>%
-      mutate_at(vars(one_of('surv', 'conf.low', 'conf.high')),
+      mutate_at(vars(one_of('surv', 'conf_low', 'conf_high')),
                 function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(surv, " [", conf.low, ", ", conf.high, "]")) %>%
+      mutate(stat= paste0(surv, " [", conf_low, ", ", conf_high, "]")) %>%
       dcast(times ~ 'Overall', value.var = 'stat')
 
   }
@@ -457,7 +457,7 @@ summarize_cif<- function(fit, times= NULL) {
   out<- if (any(names(fit)=="strata")) {
 
     ss %$%
-      map2(.x= c('pstate', 'conf.low', 'conf.high'),
+      map2(.x= c('pstate', 'conf_low', 'conf_high'),
            .y= list(pstate= pstate, lower= lower, upper= upper),
            .f= function(var, mat, ...) {
              mat %>%
@@ -469,15 +469,15 @@ summarize_cif<- function(fit, times= NULL) {
                     variable.name = 'states')
            }) %>%
       reduce(full_join, by = c('strata', 'times', 'states')) %>%
-      mutate_at(vars(one_of('pstate', 'conf.low', 'conf.high')),
+      mutate_at(vars(one_of('pstate', 'conf_low', 'conf_high')),
                 function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(pstate, " [", conf.low, ", ", conf.high, "]")) %>%
+      mutate(stat= paste0(pstate, " [", conf_low, ", ", conf_high, "]")) %>%
       dcast(times ~ states + strata, value.var = 'stat')
 
   } else {
 
     ss %$%
-      map2(.x= c('pstate', 'conf.low', 'conf.high'),
+      map2(.x= c('pstate', 'conf_low', 'conf_high'),
            .y= list(pstate= pstate, lower= lower, upper= upper),
            .f= function(var, mat, ...) {
              mat %>%
@@ -488,9 +488,9 @@ summarize_cif<- function(fit, times= NULL) {
                     variable.name = 'states')
            }) %>%
       reduce(full_join, by = c('times', 'states')) %>%
-      mutate_at(vars(one_of('pstate', 'conf.low', 'conf.high')),
+      mutate_at(vars(one_of('pstate', 'conf_low', 'conf_high')),
                 function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(pstate, " [", conf.low, ", ", conf.high, "]")) %>%
+      mutate(stat= paste0(pstate, " [", conf_low, ", ", conf_high, "]")) %>%
       dcast(times ~ states, value.var = 'stat')
   }
   out
@@ -513,15 +513,15 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
   }
 
   out<- out %>%
-    mutate(conf.low = coef - qnorm(1-alpha/2) * se,
-           conf.high= coef + qnorm(1-alpha/2) * se,
+    mutate(conf_low = coef - qnorm(1-alpha/2) * se,
+           conf_high= coef + qnorm(1-alpha/2) * se,
            coef     = if (exponentiate) exp(coef) else coef,
-           conf.low = if (exponentiate) exp(conf.low) else conf.low,
-           conf.high= if (exponentiate) exp(conf.high) else conf.high,
+           conf_low = if (exponentiate) exp(conf_low) else conf_low,
+           conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat= ifelse(is.na(coef), NA_character_,
                         paste0(formatC(coef, format= "f", digits= 3, flag= "#"), " [",
-                               formatC(conf.low, format= "f", digits= 3, flag= "#"), ", ",
-                               formatC(conf.high, format= "f", digits= 3, flag= "#"), "]")),
+                               formatC(conf_low, format= "f", digits= 3, flag= "#"), ", ",
+                               formatC(conf_high, format= "f", digits= 3, flag= "#"), "]")),
            pval= format_pvalue(p)) %>%
     select_(.dots= c("term", "stat", "pval"))
 
@@ -585,7 +585,7 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
            conf_high= `97.5 %`) %>%
     mutate(est      = if (exponentiate) exp(est) else est,
            conf_low = if (exponentiate) exp(conf_low) else conf_low,
-           conf_high= if (exponentiate) exp(conf.high) else conf_high,
+           conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
                          formatC(conf_low,  digits = 3, format= "f", flag= "#"), ", ",
                          formatC(conf_high, digits = 3, format= "f", flag= "#"), "]"),
@@ -659,14 +659,14 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     as.data.frame() %>%
     rownames_to_column("var")
   cox_out<- cox_out[c("var", "est", 'lo 95', 'hi 95', 'Pr(>|t|)')]
-  names(cox_out)<- c("var", "est", "conf.low", "conf.high", "pval")
+  names(cox_out)<- c("var", "est", "conf_low", "conf_high", "pval")
   cox_out<- cox_out %>%
     mutate(est= if (exponentiate) exp(est) else est,
-           conf.low= if (exponentiate) exp(conf.low) else conf.low,
-           conf.high= if (exponentiate) exp(conf.high) else conf.high,
+           conf_low= if (exponentiate) exp(conf_low) else conf_low,
+           conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
-                         formatC(conf.low,  digits = 3, format= "f", flag= "#"), ", ",
-                         formatC(conf.high, digits = 3, format= "f", flag= "#"), "]"),
+                         formatC(conf_low,  digits = 3, format= "f", flag= "#"), ", ",
+                         formatC(conf_high, digits = 3, format= "f", flag= "#"), "]"),
            pval= format.pvalue(pval)) %>%
     dplyr::select(var, stat, pval, everything())
 
