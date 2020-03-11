@@ -37,7 +37,7 @@ decimalplaces <- function(x, max_dec= 4L) {
   out
 }
 
-#' @title format.pvalue
+#' @title format_pvalue
 #'
 #' @details An internal function that formats p-values according to the statistical guidelines of the Annals of Medicine.
 #'
@@ -562,7 +562,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
 
   out<- type3_out %>%
     filter(df> 1) %>%
-    mutate(pval= format.pvalue(chisq_p)) %>%
+    mutate(pval= format_pvalue(chisq_p)) %>%
     dplyr::select(variable, pval) %>%
     rename(term= variable) %>%
     bind_rows(out) %>%
@@ -657,18 +657,19 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     pool() %>%
     summary(conf.int = TRUE, conf.level = 1-alpha) %>%
     as.data.frame() %>%
-    rownames_to_column("var")
-  cox_out<- cox_out[c("var", "est", 'lo 95', 'hi 95', 'Pr(>|t|)')]
-  names(cox_out)<- c("var", "est", "conf_low", "conf_high", "pval")
-  cox_out<- cox_out %>%
-    mutate(est= if (exponentiate) exp(est) else est,
-           conf_low= if (exponentiate) exp(conf_low) else conf_low,
+    rownames_to_column("var") %>%
+    rename(est      = estimate,
+           pval     = p.value,
+           conf_low = `2.5 %`,
+           conf_high= `97.5 %`) %>%
+    mutate(est      = if (exponentiate) exp(est) else est,
+           conf_low = if (exponentiate) exp(conf_low) else conf_low,
            conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
                          formatC(conf_low,  digits = 3, format= "f", flag= "#"), ", ",
                          formatC(conf_high, digits = 3, format= "f", flag= "#"), "]"),
-           pval= format.pvalue(pval)) %>%
-    dplyr::select(var, stat, pval, everything())
+           pval= format_pvalue(pval)) %>%
+    dplyr::select(var, stat, pval, est, conf_low, conf_high)
 
   # to calulate the type 3 error
   # Li, Meng, Raghunathan and Rubin. Significance levels from repated p-values with multiply-imputed data. Statistica Sinica (1991)
@@ -719,7 +720,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
   names(out)<- attr(cox_mira$analyses[[1]]$terms, "term.labels")[unique(varseq)]
 
   type3_out<- plyr::ldply(out, .id= "var") %>%
-    mutate(pval= format.pvalue(chisq_p)) %>%
+    mutate(pval= format_pvalue(chisq_p)) %>%
     filter(df>1) %>%
     dplyr::select(var, pval)
 
