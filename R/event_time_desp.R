@@ -734,25 +734,31 @@ show_cif<- function(surv_obj,
 
   #---- prepare survfit for plot ----
   cmprisk_mat<- prepare_survfit(surv_obj)
-  plot_prob_d<- cmprisk_mat %>%
+  cmprisk_mat<- cmprisk_mat %>%
     filter(state %in% evt_type) %>%
-    dplyr::select(strata, state, plot_prob_d) %>%
-    mutate(state_label= evt_label(state)) %>%
+    mutate(state_label = evt_label(state),
+           state_label = fct_drop(state_label),
+           state       = fct_drop((state)),
+           state_strata= interaction(state_label, strata, drop= TRUE, sep= ": "))
+
+  plot_prob_d<- cmprisk_mat %>%
+    dplyr::select(strata, state, state_label, state_strata, plot_prob_d) %>%
     unnest()
 
 
   add_pvalue<- if (nlevels(plot_prob_d$strata)==1) FALSE else add_pvalue
-  add_legend<- if (nlevels(plot_prob_d$strata)==1 | add_atrisk) FALSE else add_legend
+  add_legend<- if ((nlevels(plot_prob_d$strata)==1 &
+                    nlevels(plot_prob_d$state) ==1 )) FALSE else add_legend
 
   fill_fun <- switch(color_scheme,
-                     'brewer' = quote(scale_fill_brewer(palette = "Set1")),
-                     'grey'   = quote(scale_fill_grey(start= 0, end= 0.65)),
-                     'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
+                     'brewer' = quote(scale_fill_brewer(palette = "Set1", guide_legend(title= ""))),
+                     'grey'   = quote(scale_fill_grey(start= 0, end= 0.65, guide_legend(title= ""))),
+                     'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE, guide_legend(title= ""))),
                      'manual' = match.call(do.call, call('do.call', what= 'scale_fill_manual', args= color_list)))
   color_fun<- switch(color_scheme,
-                     'brewer' = quote(scale_color_brewer(palette = "Set1")),
-                     'grey'   = quote(scale_color_grey(start= 0, end= 0.65)),
-                     'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
+                     'brewer' = quote(scale_color_brewer(palette = "Set1", guide_legend(title= ""))),
+                     'grey'   = quote(scale_color_grey(start= 0, end= 0.65, guide_legend(title= ""))),
+                     'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE, guide_legend(title= ""))),
                      'manual' = match.call(do.call, call('do.call', what= 'scale_color_manual', args= color_list)))
 
   # x_lab<- if (is.null(x_lab)) "Time" else x_lab
@@ -760,10 +766,24 @@ show_cif<- function(surv_obj,
   # x_break<- if (is.null(x_break)) scales::pretty_breaks(6) else x_break
   # y_break<- if (is.null(y_break)) scales::pretty_breaks(6) else y_break
 
-  out<- ggplot() +
-    geom_step(data= plot_prob_d,
-              aes(x= time, y= prob, group= strata, color= strata),
-              size= 1.1, show.legend = add_legend) +
+  out<- ggplot()
+  out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
+    out +
+      geom_step(data= plot_prob_d,
+                aes(x= time, y= prob, group= state_label, color= state_label),
+                size= 1.1, show.legend = add_legend)
+  } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
+    out +
+      geom_step(data= plot_prob_d,
+                aes(x= time, y= prob, group= strata, color= strata),
+                size= 1.1, show.legend = add_legend)
+  } else {
+    out +
+      geom_step(data= plot_prob_d,
+                aes(x= time, y= prob, group= state_strata, color= state_strata),
+                size= 1.1, show.legend = add_legend)
+  }
+  out<- out +
     eval(color_fun) +
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
@@ -780,16 +800,49 @@ show_cif<- function(surv_obj,
 
   if (add_ci) {
     plot_ci_d<- cmprisk_mat %>%
-      filter(state %in% evt_type) %>%
-      dplyr::select(strata, state, plot_ci_d) %>%
-      mutate(state_label= evt_label(state)) %>%
+      dplyr::select(strata, state, state_label, state_strata, plot_ci_d) %>%
       unnest()
 
-    out<- out +
-      geom_ribbon(data= plot_ci_d,
-                  aes(x= time, ymin= conf_low, ymax= conf_high, fill= strata),
-                  alpha= .2, show.legend = FALSE) +
-      eval(fill_fun)
+    out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
+
+      out +
+        geom_ribbon(data= plot_ci_d,
+                    aes(x   = time,
+                        ymin= conf_low,
+                        ymax= conf_high,
+                        group= state_label,
+                        fill= state_label),
+                    alpha= .2,
+                    show.legend = FALSE)
+
+    } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
+
+      out +
+        geom_ribbon(data= plot_ci_d,
+                    aes(x= time,
+                        ymin = conf_low,
+                        ymax = conf_high,
+                        group= strata,
+                        fill = strata),
+                    alpha= .2,
+                    show.legend = FALSE)
+
+    } else {
+
+      out +
+        geom_ribbon(data= plot_ci_d,
+                    aes(x= time,
+                        ymin= conf_low,
+                        ymax= conf_high,
+                        group= state_strata,
+                        fill = state_strata),
+                    alpha= .2,
+                    show.legend = FALSE)
+
+    }
+
+    out<- out + eval(fill_fun)
+
   }
 
   if (add_pvalue) {
@@ -863,8 +916,8 @@ show_cif<- function(surv_obj,
 
   out<- out + plot_theme
 
+  print(out)
   out
-  # print(out)
   # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
   # return(out)
 }
