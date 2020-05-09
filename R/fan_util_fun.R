@@ -203,7 +203,7 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
   if (append) {
     df %>%
-      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= lazyeval::as_name(patid))
+      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
   } else {
     tmp_df %>%
       dplyr::select(-matches("^tmp_(idx|evt|end)_dt$"))
@@ -280,7 +280,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
   if (!append) tmp_df else {
     df %>%
-      inner_join(tmp_df, by= lazyeval::as_name(patid))
+      inner_join(tmp_df, by= as_name(patid))
   }
 }
 # debug(construct_cmprisk_var)

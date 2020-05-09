@@ -704,13 +704,20 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #'            color_scheme = "manual",
 #'            color_list = list(values= c('blue', 'blue')),
 #'            pvalue_pos= "topleft")
+#'
+#' #---- To show the at risk information ----
+#' gt <- ggplot_gtable(ggplot_build(p))
+#' gt$layout$clip[gt$layout$name == 'panel'] <- "off"
+#' grid.draw(gt)
 show_cif<- function(surv_obj,
                     evt_type = 1,
-                    evt_label= identity, # identity function
-                    # evt_label= function(x) recode_factor(x,
-                    #                                      `1`= "Event",
-                    #                                      `2`= "Competing event",
-                    #                                      .default= "Event free"),
+                    # evt_label= identity, # identity function
+                    evt_label= function(x) {
+                      recode_factor(x,
+                                    `1`= "Event",
+                                    `2`= "Competing event",
+                                    .default= "Event free")
+                    },
                     add_ci= TRUE,
                     add_atrisk= TRUE,
                     add_legend= FALSE,
@@ -918,8 +925,6 @@ show_cif<- function(surv_obj,
 
   print(out)
   out
-  # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
-  # return(out)
 }
 
 
