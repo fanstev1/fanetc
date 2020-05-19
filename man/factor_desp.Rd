@@ -4,13 +4,16 @@
 \alias{factor_desp}
 \title{factor_desp}
 \usage{
-factor_desp(df, group)
+factor_desp(df, group, includeNA = FALSE)
 }
 \arguments{
 \item{df}{Dataframe}
 }
 \value{
 a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
+}
+\description{
+factor_desp
 }
 \details{
 An internal function that calculate frequencies and proportion of levels in factor/categorical variables.

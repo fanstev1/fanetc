@@ -12,6 +12,9 @@ factor_dist(table_obj, col_var, pct_digits = 1, removeNA = TRUE)
 \value{
 a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
 }
+\description{
+factor_dist
+}
 \details{
 An internal function that takes a table object (i.e. a cross table for all factor variables in the data) and outputs
 marginal table. If there are more than 1 group, then fisher exact tests are applied to assess the between-group differences.

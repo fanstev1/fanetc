@@ -12,6 +12,9 @@ numeric_desp(df, group)
 \value{
 a dataframe consisting of columns of character variables.
 }
+\description{
+numeric_desp
+}
 \details{
 An internal function that report mean, standard deviation, median and interquartile range by group.
 }

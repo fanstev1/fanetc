@@ -12,6 +12,9 @@ mean_sd(x)
 \value{
 a character reporting the mean plus/minus standard deviation
 }
+\description{
+mean_sd
+}
 \details{
 An internal function that format mean and standard deviation of a continuous variable
 }

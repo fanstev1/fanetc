@@ -4,8 +4,7 @@
 \alias{table_one}
 \title{table_one}
 \usage{
-table_one(df, group, datadic = NULL, var_name = "var_name",
-  var_desp = "var_desp")
+table_one(df, group, datadic = NULL, var_name, var_desp)
 }
 \arguments{
 \item{df}{Dataframe consisting of numeric, logical, and factor variables with or without a grouping variable}
@@ -14,6 +13,9 @@ table_one(df, group, datadic = NULL, var_name = "var_name",
 }
 \value{
 The function returns a dataframe, rows of which are summary statistics depending on the variable types.
+}
+\description{
+table_one
 }
 \details{
 Main function that users interact. \code{table_one} calculate the selected summary statistics for continuous, logical,
@@ -35,9 +37,11 @@ df<- data_frame(sex   = factor(c(rep("F", 90), rep("M", 900))),
          sex   = factor(sex, 1:2, labels = c("Female", "Male")),
          grade = ifelse(runif(990)<.25, NA, grade),
          grade   = factor(grade, 1:4, labels = c("A", "B", "C", "D")))
+
  datadic<- data.frame(var_name= c("sex", "grade", "income", "dm", "af"),
                       var_desp= c("Sex", "Grade", "Household income",
-                                  "Presence of diabetes mellitus", "African American"))
+                                  "Presence of diabetes mellitus", "African American"),
+                     stringsAsFactors = FALSE)
 
 table_one(df, sex)
 table_one(df, sex, datadic= datadic)

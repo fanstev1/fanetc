@@ -12,6 +12,9 @@ fisher_test(df, group)
 \value{
 a dataframe of a single column of character variables indicating p-values.
 }
+\description{
+fisher_test
+}
 \details{
 An internal function that applies fisher exact tests to assess the between-group differences in logical variables
 }

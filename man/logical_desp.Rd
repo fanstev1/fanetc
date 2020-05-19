@@ -12,6 +12,9 @@ logical_desp(df, group)
 \value{
 a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
 }
+\description{
+logical_desp
+}
 \details{
 An internal function that calculate frequencies and proportion of TRUE in logical variables. If there are more
 than 1 group, then fisher exact tests are applied to assess the between-group differences.

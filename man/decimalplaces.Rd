@@ -12,6 +12,9 @@ decimalplaces(x, max_dec = 4L)
 \value{
 the most frequent number of digits in the variable
 }
+\description{
+decimalplaces
+}
 \details{
 An internal function that determines the number of digits in the summary of a continuous variable.
 }

@@ -12,6 +12,9 @@ n_avail(x)
 \value{
 a character reporting the number of non-missing observations
 }
+\description{
+n_avail
+}
 \details{
 An internal function that format the number of non-missing observations in a variable
 }

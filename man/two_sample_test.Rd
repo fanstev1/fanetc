@@ -14,6 +14,9 @@ two_sample_test(df, group)
 \value{
 a 2-tuple vectors reporting p-values
 }
+\description{
+two_sample_test
+}
 \details{
 An internal function that tests equality of location parameter using two sample t-tests with unequal
 variance when mean is reported and nonparametric rank-sum tests otherwise in comparing of two groups.

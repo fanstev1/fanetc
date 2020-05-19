@@ -14,6 +14,9 @@ k_sample_test(df, group)
 \value{
 a 2-tuple vectors reporting p-values
 }
+\description{
+k_sample_test
+}
 \details{
 An internal function that tests equality of location parameter using one way ANOVA with unequal
 variance when mean is reported and nonparametric Kruskal-Wallis tests otherwise in comparing >2 groups.

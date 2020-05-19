@@ -2,7 +2,7 @@
 % Please edit documentation in R/fan_util_fun.R
 \name{format_pvalue}
 \alias{format_pvalue}
-\title{format.pvalue}
+\title{format_pvalue}
 \usage{
 format_pvalue(x, eps = 0.001, trim = TRUE, droptrailing0 = FALSE,
   pad = FALSE, ...)
@@ -12,6 +12,9 @@ format_pvalue(x, eps = 0.001, trim = TRUE, droptrailing0 = FALSE,
 }
 \value{
 character variables reporting p-values
+}
+\description{
+format_pvalue
 }
 \details{
 An internal function that formats p-values according to the statistical guidelines of the Annals of Medicine.

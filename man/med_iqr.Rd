@@ -12,6 +12,9 @@ med_iqr(x)
 \value{
 a character reporting the median (Q1 - Q3)
 }
+\description{
+med_iqr
+}
 \details{
 An internal function that format median and interquartile range of a continuous variable
 }

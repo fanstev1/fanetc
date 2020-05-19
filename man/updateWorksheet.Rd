@@ -16,6 +16,9 @@ updateWorksheet(wb, sheetName, x, ...)
 \value{
 a \code{wb} object
 }
+\description{
+updateWorksheet
+}
 \details{
 An internal function that adds a new worksheet or updates (remove and add) the existing worksheet in wb object.
 }

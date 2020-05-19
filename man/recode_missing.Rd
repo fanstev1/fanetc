@@ -9,6 +9,9 @@ recode_missing(x, na.value = NULL)
 \value{
 input variable with NA
 }
+\description{
+recode_missing
+}
 \details{
 An internal function that replace missing value code with NA.
 }
