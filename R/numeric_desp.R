@@ -8,6 +8,7 @@
 #'
 #' @param df Dataframe
 #' @return a dataframe consisting of columns of character variables.
+#' @export
 numeric_desp<- function(df, group) {
   group<- rlang::enquo(group)
   df<- df %>%
@@ -67,6 +68,7 @@ numeric_desp<- function(df, group) {
 #'
 #' @param x Numeric variable
 #' @return a character reporting the number of non-missing observations
+#' @export
 n_avail<- function(x) formatC( sum( !is.na(x) ), digits= 0, format= "d", big.mark = ",")
 
 #' @title mean_sd
@@ -75,6 +77,7 @@ n_avail<- function(x) formatC( sum( !is.na(x) ), digits= 0, format= "d", big.mar
 #'
 #' @param x Numeric variable
 #' @return a character reporting the mean plus/minus standard deviation
+#' @export
 mean_sd<- function(x) {
   n_dec<- decimalplaces(x)
 
@@ -100,6 +103,7 @@ mean_sd<- function(x) {
 #'
 #' @param x Numeric variable
 #' @return a character reporting the median (Q1 - Q3)
+#' @export
 med_iqr<- function(x) {
   q1<- function(x, ...) quantile(x, probs = .25, ...)
   q3<- function(x, ...) quantile(x, probs = .75, ...)
@@ -132,6 +136,7 @@ med_iqr<- function(x) {
 #' @param x Numeric variable
 #' @param grp Factor variable
 #' @return a 2-tuple vectors reporting p-values
+#' @export
 two_sample_test<- function(df, group) {
 
   group<- enquo(group)
@@ -184,6 +189,7 @@ two_sample_test<- function(df, group) {
 #' @param x Numeric variable
 #' @param grp Factor variable
 #' @return a 2-tuple vectors reporting p-values
+#' @export
 k_sample_test<- function(df, group) {
 
   group<- enquo(group)

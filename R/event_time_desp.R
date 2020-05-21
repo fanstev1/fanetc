@@ -6,6 +6,7 @@
 #' @param fit a survfit object
 #' @param time.list a numeric vector specifying the time points at which the number of at-risk subjects is calculated.
 #' @return A dataframe containing the number of at risk patients at time-, overall or by strata
+#' @export
 extract_atrisk<- function(fit, time.list, time.scale= 1) {
 
   if (any(names(fit)=="strata")){
@@ -280,6 +281,7 @@ add_atrisk<- function(p, surv_obj, x_break= NULL) {
 #' transformation (same as SAS's defualt). The function store the input data in the call(), which can be used in
 #' run_logrank_test().
 #'
+#' @export
 estimate_km<- function(df, evt_time, evt, group, ...) {
 
   evt_time<- enquo(evt_time)
@@ -302,6 +304,7 @@ estimate_km<- function(df, evt_time, evt, group, ...) {
   out
 }
 
+#' @export
 run_logrank_test<- function(surv_obj) {
 
   tmp<- surv_obj$call
@@ -368,6 +371,7 @@ run_logrank_test<- function(surv_obj) {
 #'
 #' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 #' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+#' @export
 show_surv<- function(surv_obj,
                      x_lab= 'Time',
                      y_lab= if (plot_cdf) 'The proportion of deceased subjects' else 'The freedom from death',
@@ -598,6 +602,7 @@ show_surv<- function(surv_obj,
 #' function.The function store the input data in the call(), which can be used in run_gray_test().
 #'
 #'
+#' @export
 estimate_cif<- function(df, evt_time, evt, group, ...) {
 
   evt_time<- enquo(evt_time)
@@ -619,6 +624,8 @@ estimate_cif<- function(df, evt_time, evt, group, ...) {
   out<- eval(out)
   out
 }
+
+
 
 run_gray_test<- function(surv_obj, evt_type= 1:2) {
 
@@ -709,6 +716,7 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' gt <- ggplot_gtable(ggplot_build(p))
 #' gt$layout$clip[gt$layout$name == 'panel'] <- "off"
 #' grid.draw(gt)
+#' @export
 show_cif<- function(surv_obj,
                     evt_type = 1,
                     # evt_label= identity, # identity function

@@ -27,8 +27,5 @@ A data frame with patid, evt_time and evt.
 construct_surv_var
 }
 \details{
-The function creates time-to-event variables with the application of administrative censoring for a binary (survival) process.
-The newly created variables are named by the same variables names but with a suffix of '_adm' by default. The original
-variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
-it can be useful in some situations.
+The function creates time-to-event variables for a binary (survival) process.
 }

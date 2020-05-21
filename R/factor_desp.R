@@ -6,6 +6,7 @@
 #'
 #' @param df Dataframe
 #' @return a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
+#' @export
 factor_desp<- function(df, group, includeNA= FALSE) {
 
   ##

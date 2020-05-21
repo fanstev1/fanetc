@@ -32,6 +32,7 @@
 #'
 #' table_one(df, sex)
 #' table_one(df, sex, datadic= datadic)
+#' @export
 table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
   op<- options(warn = -1)
   on.exit(options(op))

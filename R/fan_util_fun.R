@@ -43,6 +43,7 @@ decimalplaces <- function(x, max_dec= 4L) {
 #'
 #' @param x Numeric variable
 #' @return character variables reporting p-values
+#' @export
 format_pvalue <- function(x, eps = 0.001, trim = TRUE,
                           droptrailing0 = FALSE,
                           # tex = TRUE,
@@ -82,6 +83,7 @@ format_pvalue <- function(x, eps = 0.001, trim = TRUE,
 #' @param sheetName a name of the sheet to be updated
 #' @param x a dataframe to be write in the \code{wb} object
 #' @return a \code{wb} object
+#' @export
 updateWorksheet<- function(wb, sheetName, x, ...) {
   if (!is.na(sheet_pos<- match(sheetName, names(wb), nomatch= NA))) {
 
@@ -114,10 +116,7 @@ recode_missing<- function(x, na.value= NULL) {
 #' @title construct_surv_var
 #'
 #' @details
-#' The function creates time-to-event variables with the application of administrative censoring for a binary (survival) process.
-#' The newly created variables are named by the same variables names but with a suffix of '_adm' by default. The original
-#' variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
-#' it can be useful in some situations.
+#' The function creates time-to-event variables for a binary (survival) process.
 #'
 #' @param df input data
 #' @param idx_dt the index date
@@ -138,6 +137,7 @@ recode_missing<- function(x, na.value= NULL) {
 #'          patid= 1:n())
 #' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid)
 #' test %>% construct_surv_var(idx_dt, evt_dt, end_dt, patid, surv_varname= c("day_dth", "dth"))
+#' @export
 construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= NULL, append= FALSE) {
 
   # date of origin in R:   1970-01-01
@@ -211,6 +211,12 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
 }
 
+#' @title construct_cmprisk_var
+#'
+#' @details
+#' The function creates time-to-event variables for competing risk data
+#'
+#' @export
 construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname= NULL, append= FALSE, ...) {
   patid <- enquo(patid)
   idx_dt<- enquo(idx_dt)
@@ -313,6 +319,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
 #' aml %>% admin_censor_surv(evt_time= time, evt= status) # No admin censoring
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
+#' @export
 admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_var= FALSE) {
   ######################################################################################
   ## the function creates administrately censored version of event time and indicator ##
@@ -362,6 +369,7 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
 #' @example
 #' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 #' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+#' @export
 admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label= NULL, overwrite_var= FALSE) {
 
   evt_time<- enquo(evt_time)
@@ -403,6 +411,12 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 }
 
 
+#' @title summarize_km
+#'
+#' @details
+#' The function summarize the fitted KM at the time points specified by a user.
+#'
+#' @export
 summarize_km<- function(fit, times= NULL) {
   ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
 
@@ -449,6 +463,14 @@ summarize_km<- function(fit, times= NULL) {
   out
 }
 
+
+
+#' @title summarize_cif
+#'
+#' @details
+#' The function summarize the fitted CIF at the time points specified by a user.
+#'
+#' @export
 summarize_cif<- function(fit, times= NULL) {
   ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
   colnames(ss$pstate)<- colnames(ss$lower)<- colnames(ss$upper)<- replace(ss$state, sapply(ss$states, nchar)==0, "0")
@@ -497,6 +519,12 @@ summarize_cif<- function(fit, times= NULL) {
 }
 
 
+#' @title summarize_coxph
+#'
+#' @details
+#' The function summarize the fitted cox model and calculate the type 3 error.
+#'
+#' @export
 summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
 
   if (!any(class(mdl) %in% c("coxph", "coxph.penal"))) stop("Not a coxph or coxph.penal object.")
@@ -572,6 +600,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
   out
 }
 
+#' @export
 summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
   # mira_obj<- adj_t
   glm_out<- mira_obj %>%
@@ -651,6 +680,7 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
     arrange(var)
 }
 
+#' @export
 summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
   cox_out<- cox_mira %>%

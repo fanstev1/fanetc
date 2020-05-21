@@ -9,6 +9,7 @@
 #'
 #' @param df Dataframe
 #' @return a dataframe consisting of columns of character variables indicating the frequency and proportion of logical variables.
+#' @export
 logical_desp<- function(df, group) {
 
   binary_desp<- function(x, pct_digits= 1) {
