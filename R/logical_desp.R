@@ -65,7 +65,8 @@ logical_desp<- function(df, group) {
       melt(id.vars= quo_name(group), factorsAsStrings= TRUE) %>%
       dcast(as.formula(paste("variable", quo_name(group), sep= " ~ "))) %>%
       mutate(type= "freq") %>%
-      left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
+      # left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
+      left_join(test_fun(df, !!group), by= c("variable", "type"))
 
     n_var<- df %>%
       summarise_if(is.logical, funs(n_avail)) %>%

@@ -45,7 +45,8 @@ numeric_desp<- function(df, group) {
       mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
              variable= gsub("(_mean_sd|_med_iqr)$", "", variable)) %>%
       # adding the p-values
-      left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
+      # left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
+      left_join(test_fun(df, !!group), by= c("variable", "type"))
 
     n_var<- df %>%
       summarise_if(is.numeric, funs(n_avail)) %>%

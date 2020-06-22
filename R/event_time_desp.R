@@ -178,10 +178,10 @@ prepare_survfit<- function(surv_obj) {
 add_atrisk<- function(p, surv_obj, x_break= NULL) {
 
   #---- get parameters required for where to include the at-risk table ----#
-  atrisk_y_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
-                             diff(p$coordinates$limits$y))
-  # atrisk_y_pos<- -0.225 * max(diff(layer_scales(p)$y$range$range),
-  #                             diff(p$coordinates$limits$y))
+  # atrisk_y_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
+  #                            diff(p$coordinates$limits$y))
+  atrisk_y_pos<- -0.225 * max(diff(layer_scales(p)$y$range$range),
+                              diff(p$coordinates$limits$y))
   x_break     <- if (is.null(x_break)) {
     layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
   } else {
