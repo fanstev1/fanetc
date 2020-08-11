@@ -211,7 +211,11 @@ add_atrisk<- function(p, surv_obj, x_break= NULL) {
     # no strata #
     for (i in seq_along(risk_tbl$time))  {
       out<- out + annotation_custom(
-        grob = textGrob(label = risk_tbl[i, 2],
+        grob = textGrob(label = formatC(risk_tbl[i, 2],
+                                        digits = 0,
+                                        format = "d",
+                                        big.mark = ",",
+                                        flag = "#"),
                         vjust= 1, hjust = 0.5,
                         gp = gpar(family="Arial",
                                   # fontface="bold",
