@@ -229,7 +229,9 @@ add_atrisk<- function(p, surv_obj, x_break= NULL) {
     # strata #
 
     # when there are strata, atrisk_y_inc indicates the relative position from the initial at-risk y pos.
-    atrisk_y_inc<- -0.075* diff(layer_scales(p)$y$range$range)
+    # atrisk_y_inc<- -0.075 * diff(layer_scales(p)$y$range$range)
+    atrisk_y_inc<- -0.05 * max(diff(layer_scales(p)$y$range$range),
+                                diff(p$coordinates$limits$y))
 
     # extract the color code used in the plot for different strata
     strata_col<- unique(layer_data(p)$colour)
