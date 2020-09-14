@@ -684,7 +684,9 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
 summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
   cox_out<- cox_mira %>%
-    pool() %>%
+    # pool() %>%
+    # see https://github.com/amices/mice/issues/246#
+    pool(dfcom = getfit(., 1L)$nevent - length(coef(getfit(., 1L)))) %>%
     summary(conf.int = TRUE, conf.level = 1-alpha) %>%
     as.data.frame() %>%
     rownames_to_column("var") %>%
