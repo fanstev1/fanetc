@@ -7,7 +7,7 @@
 show_cif(surv_obj, evt_type = 1, evt_label = function(x) {    
   recode_factor(x, `1` = "Event", `2` = "Competing event", .default =
   "Event free") }, add_ci = TRUE, add_atrisk = TRUE,
-  add_legend = FALSE, add_pvalue = TRUE,
+  add_legend = FALSE, add_pvalue = TRUE, atrisk_init_pos = NULL,
   pvalue_pos = c("bottomright", "topleft", "topright", "bottomleft",
   "left", "right", "top", "bottom"), plot_theme = theme_minimal(),
   x_lab = "Time", y_lab = "Proportion of subjects", x_lim = NULL,
@@ -20,13 +20,13 @@ show_cif(surv_obj, evt_type = 1, evt_label = function(x) {
 
 \item{add_ci}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
 
-\item{add_atrisk}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{add_atrisk}{a logical parameter indicating whether at-risk table should be added to the figure.}
 
-\item{add_legend}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{add_legend}{a logical parameter indicating whether legend should be added to the figure.}
 
-\item{add_pvalue}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{add_pvalue}{a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.}
 
-\item{pvalue_pos}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{pvalue_pos}{a character parameter indicating where the p-value should be added to the plot.}
 
 \item{plot_theme}{a numeric vector recording the time points at which the event occurs.}
 
@@ -40,7 +40,7 @@ show_cif(surv_obj, evt_type = 1, evt_label = function(x) {
 
 \item{color_list}{input data}
 
-\item{plot_cdf}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{plot_cdf}{Not used}
 }
 \value{
 A ggplot object.

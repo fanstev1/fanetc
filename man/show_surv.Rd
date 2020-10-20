@@ -10,8 +10,9 @@ show_surv(surv_obj, x_lab = "Time", y_lab = if (plot_cdf)
   color_scheme = c("brewer", "grey", "viridis", "manual"),
   color_list = NULL, plot_theme = theme_minimal(), add_ci = TRUE,
   add_atrisk = TRUE, add_legend = FALSE, add_pvalue = TRUE,
-  pvalue_pos = c("topleft", "topright", "bottomleft", "bottomright",
-  "left", "right", "top", "bottom"), plot_cdf = FALSE)
+  atrisk_init_pos = NULL, pvalue_pos = c("topleft", "topright",
+  "bottomleft", "bottomright", "left", "right", "top", "bottom"),
+  plot_cdf = FALSE)
 }
 \arguments{
 \item{surv_obj}{a numeric vector recording the time points at which the event occurs.}
@@ -28,15 +29,15 @@ show_surv(surv_obj, x_lab = "Time", y_lab = if (plot_cdf)
 
 \item{add_ci}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
 
-\item{add_atrisk}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{add_atrisk}{a logical parameter indicating whether at-risk table should be added to the figure.}
 
-\item{add_legend}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{add_legend}{a logical parameter indicating whether legend should be added to the figure.}
 
-\item{add_pvalue}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{add_pvalue}{a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.}
 
-\item{pvalue_pos}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{pvalue_pos}{a character parameter indicating where the p-value should be added to the plot.}
 
-\item{plot_cdf}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{plot_cdf}{a logical scalar (default= FALSE) indiciates if the CDF (instead of) survival function should be plotted.}
 
 \item{x_lim}{a numeric vector specifying the time point at which administrative censoring is applied.}
 }

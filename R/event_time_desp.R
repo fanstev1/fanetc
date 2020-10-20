@@ -169,19 +169,23 @@ prepare_survfit<- function(surv_obj) {
                             df %$%
                               data_frame(time     = time[xs],
                                          conf_low = conf_low[ys],
-                                         conf_high= conf_high[ys])
+                                         conf_high= conf_high[ys]) %>%
+                              filter(!(is.na(conf_low) & is.na(conf_high)))
                           }))
   return(out)
 }
 
 
-add_atrisk<- function(p, surv_obj, x_break= NULL) {
+add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
   #---- get parameters required for where to include the at-risk table ----#
   # atrisk_y_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
   #                            diff(p$coordinates$limits$y))
-  atrisk_y_pos<- -0.225 * max(diff(layer_scales(p)$y$range$range),
-                              diff(p$coordinates$limits$y))
+  atrisk_y_pos<- if (is.null(atrisk_init_pos)) {
+    -0.225 * max(diff(layer_scales(p)$y$range$range),
+                 diff(p$coordinates$limits$y))
+  } else atrisk_init_pos
+
   x_break     <- if (is.null(x_break)) {
     layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
   } else {
@@ -333,14 +337,14 @@ run_logrank_test<- function(surv_obj) {
 #' @param y_lab a numeric vector specifying the time point at which administrative censoring is applied.
 #' @param x_lim a numeric vector specifying the time point at which administrative censoring is applied.
 #' @param y_lim a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param color_list input data
-#' @param plot_theme a numeric vector recording the time points at which the event occurs.
-#' @param add_ci an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
-#' @param add_atrisk a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param add_legend a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param add_pvalue a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param pvalue_pos a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param color_list a list containing the parameter values for scale_color_manual() or scale_fill_manual()
+#' @param plot_theme a user-specify ggplot theme.
+#' @param add_ci  logical parameter indicating whether a pointwise 95% confidence interval should be added.
+#' @param add_atrisk a logical parameter indicating whether at-risk table should be added to the figure.
+#' @param add_legend a logical parameter indicating whether legend should be added to the figure.
+#' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
+#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
+#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the CDF (instead of) survival function should be plotted.
 #' @return A ggplot object.
 #' @example
 #' my_plot_theme<- theme_bw() +
@@ -393,6 +397,7 @@ show_surv<- function(surv_obj,
                      add_atrisk= TRUE,
                      add_legend= FALSE,
                      add_pvalue= TRUE,
+                     atrisk_init_pos= NULL,
                      pvalue_pos= c("topleft", "topright", "bottomleft", "bottomright", "left", "right", "top", "bottom"),
                      plot_cdf= FALSE) {
 
@@ -510,7 +515,8 @@ show_surv<- function(surv_obj,
   out<- out + scale_y_continuous(name  = y_lab,
                            # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
                            breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                           expand= c(0.01, 0.005),
+                           # expand= c(0.01, 0.005),
+                           expand= c(0.005, 0),
 
                            labels= scales::percent)
 
@@ -589,7 +595,7 @@ show_surv<- function(surv_obj,
         xmax = pvalue.x)
   }
 
-  if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break)
+  if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break, atrisk_init_pos= atrisk_init_pos)
 
   out<- out + plot_theme
 
@@ -659,11 +665,11 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @param color_list input data
 #' @param plot_theme a numeric vector recording the time points at which the event occurs.
 #' @param add_ci an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
-#' @param add_atrisk a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param add_legend a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param add_pvalue a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param pvalue_pos a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
+#' @param add_atrisk a logical parameter indicating whether at-risk table should be added to the figure.
+#' @param add_legend a logical parameter indicating whether legend should be added to the figure.
+#' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
+#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
+#' @param plot_cdf Not used
 #' @return A ggplot object.
 #' @example
 #' my_plot_theme<- theme_bw() +
@@ -736,6 +742,7 @@ show_cif<- function(surv_obj,
                     add_atrisk= TRUE,
                     add_legend= FALSE,
                     add_pvalue= TRUE,
+                    atrisk_init_pos= NULL,
                     pvalue_pos= c("bottomright", "topleft", "topright", "bottomleft", "left", "right", "top", "bottom"),
 
                     plot_theme= theme_minimal(),
@@ -813,7 +820,7 @@ show_cif<- function(surv_obj,
                        labels= scales::comma) +
     scale_y_continuous(name  = y_lab,
                        breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                       expand= c(0.01, 0.005),
+                       expand= c(0.01, 0),
                        # limits= y_lim,
                        labels= scales::percent)
 
@@ -933,7 +940,10 @@ show_cif<- function(surv_obj,
         xmax = pvalue.x)
   }
 
-  if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break)
+  if (add_atrisk) out<- add_atrisk(out,
+                                   surv_obj = surv_obj,
+                                   x_break = x_break,
+                                   atrisk_init_pos= atrisk_init_pos)
 
   out<- out + plot_theme
 
