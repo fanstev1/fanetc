@@ -74,6 +74,12 @@ logical_desp<- function(df, group) {
       dcast(as.formula(paste("variable", quo_name(group), sep= " ~ ")))
   }
 
+  n_var<- n_var %>%
+    mutate_all(as.character)
+
+  sum_stat<- sum_stat %>%
+    mutate_all(as.character)
+
   left_join(n_var, sum_stat, by= "variable", suffix= c("_n", "_stat")) %>%
     dplyr::select(variable, type, everything()) %>%
     mutate(type= NA_character_) %>%
@@ -133,7 +139,8 @@ fisher_test<- function(df, group) {
     dplyr::select(-data) %>%
     unnest() %>%
     melt(id.vars= "variable", variable.name= "type", value.name = "pval") %>%
-    mutate(pval= format_pvalue(pval))
+    mutate(pval= format_pvalue(pval)) %>%
+    mutate_all(as.character)
 
   #   variable  type       pval
   # 1       dm  freq 0.04608804

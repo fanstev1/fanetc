@@ -46,12 +46,19 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       mutate(pct= formatC(pct*100, digits= pct_digits, format= "f")) %>%
       dplyr::select(level, pct)
 
+    freq<- freq %>%
+      mutate_all(as.character)
+
+    pct<- pct %>%
+      mutate_all(as.character)
+
     out<- full_join(freq, pct, by = c("level")) %>%
       mutate(stat= paste0(freq, " (", pct, "%)"),
              stat= ifelse(level=="Sum", NA_character_, stat),
              level= ifelse(level=="Sum", ".", level)) %>%
-      dplyr::select(level, n, stat) #%>%
-      # arrange(level)
+      dplyr::select(level, n, stat) %>%
+      mutate_all(as.character)
+
     out[match(c('.', levels(df[[var_name]])), out$level),]
   }
 
@@ -70,7 +77,6 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       dcast(as.formula( paste0(". ~ ", tbl_var_name[2])), value.var = "n") %>%
       bind_cols(pval= format_pvalue(test))
 
-
     freq<- freq %>%
       as.data.frame(responseName = "freq", stringsAsFactors = FALSE) %>%
       mutate(freq= ifelse(!is.na(freq), formatC(freq, format= "d", big.mark = ","), NA_character_))
@@ -79,11 +85,19 @@ factor_desp<- function(df, group, includeNA= FALSE) {
       as.data.frame(responseName = "pct", stringsAsFactors = FALSE) %>%
       mutate(pct= formatC(pct*100, digits= pct_digits, format= "f"))
 
+    freq<- freq %>%
+      mutate_all(as.character)
+
+    pct<- pct %>%
+      mutate_all(as.character)
+
     out<- full_join(freq, pct, by= tbl_var_name) %>%
       mutate(stat= paste0(freq, " (", pct, "%)")) %>%
       # bind_rows(total) %>%
       dplyr::select(-freq, -pct) %>%
-      dcast(as.formula(paste0(tbl_var_name, collapse= " ~ ")), value.var = "stat")
+      dcast(as.formula(paste0(tbl_var_name, collapse= " ~ ")),
+            value.var = "stat") %>%
+      mutate_all(as.character)
 
     names(out)[1]<- names(total)[1]<- "level"
     out<- full_join(total, out, by= "level", suffix= c("_n", "_stat"))

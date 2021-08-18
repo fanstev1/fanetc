@@ -55,6 +55,12 @@ numeric_desp<- function(df, group) {
 
   }
 
+  n_var<- n_var %>%
+    mutate_all(as.character)
+
+  sum_stat<- sum_stat %>%
+    mutate_all(as.character)
+
   left_join(n_var, sum_stat, by= "variable", suffix= c("_n", "_stat")) %>%
     dplyr::select(variable, type, everything()) %>%
     arrange(variable, type)
@@ -172,7 +178,8 @@ two_sample_test<- function(df, group) {
     melt(id.vars= "variable", variable.name= "type", value.name = "pval") %>%
     mutate(type= ifelse(grepl("^ttest", type), "meansd", "mediqr"),
            pval= format_pvalue(pval)
-    )
+    ) %>%
+    mutate_all(as.character)
   #   variable   type   pval
   # 1   income meansd   0.52
   # 2   weight meansd <0.001
@@ -223,5 +230,6 @@ k_sample_test<- function(df, group) {
     melt(id.vars= "variable", variable.name= "type", value.name = "pval") %>%
     mutate(type= ifelse(grepl("^oneway", type), "meansd", "mediqr"),
            pval= format_pvalue(pval)
-    )
+    ) %>%
+    mutate_all(as.character)
 }
