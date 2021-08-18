@@ -79,7 +79,7 @@ prepare_survfit<- function(surv_obj) {
 
     out<- data_frame(strata   = stemp,
                      # state    = rep(surv_obj$state, each= length(surv_obj$time)),
-                     state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0, "0"),
+                     state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0 | grepl("0", surv_obj$state), "0"),
                                     each= length(surv_obj$time)),
                      time     = rep(surv_obj$time, length(surv_obj$state)),
                      prob     = as.numeric(surv_obj$pstate),
