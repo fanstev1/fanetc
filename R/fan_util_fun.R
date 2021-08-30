@@ -551,7 +551,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
                                formatC(conf_low, format= "f", digits= 3, flag= "#"), ", ",
                                formatC(conf_high, format= "f", digits= 3, flag= "#"), "]")),
            pval= format_pvalue(p)) %>%
-    select_(.dots= c("term", "stat", "pval"))
+    dplyr::select(one_of(c("term", "stat", "pval")))
 
   type3_coxph<- function(mdl, beta_var= vcov(mdl)) {
     x<- model.matrix(mdl)
@@ -580,9 +580,10 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
 
     term_excld<- attr(mdl$terms, "response")
     term_excld<- if (!is.null(attr(mdl$terms, "specials"))) c(term_excld, unlist(attr(mdl$terms, "specials")[c("strata", "cluster")]))
-    out<- cbind(variable= names(attr(mdl$terms, "dataClasses"))[-term_excld],
+    # out<- cbind(variable= names(attr(mdl$terms, "dataClasses"))[-term_excld],
+    #             out, stringsAsFactors= FALSE)
+    out<- cbind(variable= attr(mdl$terms, "term.labels"),
                 out, stringsAsFactors= FALSE)
-
     out
   }
 
