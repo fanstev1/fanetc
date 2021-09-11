@@ -190,7 +190,7 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
     flag<- TRUE
   }
 
-  if (flag) print(flag_df)
+  if (flag) print(as.data.frame(flag_df))
 
   tmp_df<- if (is.null(surv_varname)) {
     rename(tmp_df,
@@ -254,6 +254,13 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
              TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
     )
 
+  # per documentation, evt will be treated as a factor with the 1st level as censoring
+  # in the situtation in which no pts are censored, no observations have a value of zero.
+  # need to convert evt to a factor forcing 0 as the first level of the factor.
+  tmp_df<- tmp_df %>%
+    mutate(evt= factor(evt, 0:max(evt, na.rm= TRUE), labels = 0:max(evt, na.rm= TRUE)))
+
+
   flag<- FALSE
   flag_df<- tmp_df %>%
     filter(time2evt<=0) %>%
@@ -272,7 +279,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
     flag<- TRUE
   }
 
-  if (flag) print(flag_df)
+  if (flag) print(as.data.frame(flag_df))
 
   tmp_df<- if (is.null(cmprisk_varname)) {
     tmp_df %>%
@@ -284,6 +291,8 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   }
 
   tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
+
+
   if (!append) tmp_df else {
     df %>%
       inner_join(tmp_df, by= as_name(patid))
@@ -361,7 +370,7 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
 #'
 #' @param df input data
 #' @param evt_time a numeric vector recording the time points at which the event occurs.
-#' @param evt an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param evt a factor vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
 #' @param adm_cnr_time a numeric vector specifying the time point at which administrative censoring is applied.
 #' @param evt_label a numeric vector specifying the time point at which administrative censoring is applied.
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
@@ -377,10 +386,13 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 
   if (is.null(adm_cnr_time)) {
 
-    if (!is.null(evt_label)) {
-      df<- df %>%
-        mutate(!!lazyeval::as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
-    }
+    stop("No administrative censor time is given.")
+    # if (!is.null(evt_label)) {
+    #   # df<- df %>%
+    #   #   mutate(!!lazyeval::as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+    #   # df[[as_name(evt)]]<- evt_label[levels(df[[as_name(evt)]])]
+    #   df$as_name(evt)<- evt_label[levels(df$as_name(evt))]
+    # }
 
   } else {
 
@@ -394,19 +406,20 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 
     df<- if (is.null(evt_label)) {
       df %>%
-        mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
+        mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= "0", "0"),
                !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
     } else {
       df %>%
-        mutate(!!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= 0, 0),
-                                             as.integer(names(evt_label)),
+        mutate(!!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= "0", "0"),
+                                             # as.integer(names(evt_label)),
+                                             names(evt_label),
                                              labels = evt_label),
                !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
     }
   }
 
-  df<- if (overwrite_var | is.null(evt_label)) df else mutate(df,
-                                                              !!quo_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
+  # df<- if (overwrite_var | is.null(evt_label)) df else mutate(df,
+  #                                                             !!quo_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
   df
 }
 

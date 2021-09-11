@@ -77,7 +77,7 @@ prepare_survfit<- function(surv_obj) {
       stemp <- factor(stemp, 1:nstrat, strata_lab)
     }
 
-    out<- data_frame(strata   = stemp,
+    out<- tibble(strata   = stemp,
                      # state    = rep(surv_obj$state, each= length(surv_obj$time)),
                      state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0 | grepl("0", surv_obj$state), "0"),
                                     each= length(surv_obj$time)),
@@ -105,7 +105,7 @@ prepare_survfit<- function(surv_obj) {
       stemp <- factor(rep(1:nstrat, surv_obj$strata), 1:nstrat, strata_lab)
     }
 
-    data_frame(strata   = stemp,
+    tibble(strata   = stemp,
                time     = surv_obj$time,
                prob     = surv_obj$surv,
                conf_low = surv_obj$lower,
@@ -167,7 +167,7 @@ prepare_survfit<- function(surv_obj) {
                             xs<- c( 1, rep( 2:nn, each = 2))
 
                             df %$%
-                              data_frame(time     = time[xs],
+                              tibble(time     = time[xs],
                                          conf_low = conf_low[ys],
                                          conf_high= conf_high[ys]) %>%
                               filter(!(is.na(conf_low) & is.na(conf_high)))
@@ -196,7 +196,7 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
   nstrata <- ncol(risk_tbl)-1
-  # as_data_frame(risk_tbl)
+  # as_tibble(risk_tbl)
 
   # add 'At-risk' at x= 0 and y= atrisk_y_pos
   out <- p + annotation_custom(
@@ -437,7 +437,7 @@ show_surv<- function(surv_obj,
 
   plot_prob_d<- surv_mat %>%
     dplyr::select(strata, plot_prob_d) %>%
-    unnest() %>%
+    unnest(cols = c(plot_prob_d)) %>%
     mutate(prob= if (plot_cdf) 1-prob else prob)
 
   if (y_lim[2]< 1) {
@@ -461,7 +461,7 @@ show_surv<- function(surv_obj,
   if (add_ci) {
     plot_ci_d<- surv_mat %>%
       dplyr::select(strata, plot_ci_d) %>%
-      unnest()
+      unnest(cols = c(plot_ci_d))
 
     if (plot_cdf) {
       plot_ci_d<- plot_ci_d %>%
