@@ -771,7 +771,7 @@ show_cif<- function(surv_obj,
 
   plot_prob_d<- cmprisk_mat %>%
     dplyr::select(strata, state, state_label, state_strata, plot_prob_d) %>%
-    unnest()
+    unnest(cols = c(plot_prob_d))
 
 
   add_pvalue<- if (nlevels(plot_prob_d$strata)==1) FALSE else add_pvalue
@@ -829,7 +829,7 @@ show_cif<- function(surv_obj,
   if (add_ci) {
     plot_ci_d<- cmprisk_mat %>%
       dplyr::select(strata, state, state_label, state_strata, plot_ci_d) %>%
-      unnest()
+      unnest(cols = c(plot_ci_d))
 
     out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
 
