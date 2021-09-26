@@ -78,13 +78,13 @@ prepare_survfit<- function(surv_obj) {
     }
 
     out<- tibble(strata   = stemp,
-                     # state    = rep(surv_obj$state, each= length(surv_obj$time)),
-                     state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0 | grepl("0", surv_obj$state), "0"),
-                                    each= length(surv_obj$time)),
-                     time     = rep(surv_obj$time, length(surv_obj$state)),
-                     prob     = as.numeric(surv_obj$pstate),
-                     conf_low = as.numeric(surv_obj$lower),
-                     conf_high= as.numeric(surv_obj$upper))
+                 # state    = rep(surv_obj$state, each= length(surv_obj$time)),
+                 state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0 | grepl("0", surv_obj$state), "0"),
+                                each= length(surv_obj$time)),
+                 time     = rep(surv_obj$time, length(surv_obj$state)),
+                 prob     = as.numeric(surv_obj$pstate),
+                 conf_low = as.numeric(surv_obj$lower),
+                 conf_high= as.numeric(surv_obj$upper))
     if (class(out$strata)!= 'factor') out$strata<- factor(out$strata)
     if (class(out$state) != 'factor') out$state <- relevel(factor(out$state), ref= '0')
     out
@@ -106,14 +106,14 @@ prepare_survfit<- function(surv_obj) {
     }
 
     tibble(strata   = stemp,
-               time     = surv_obj$time,
-               prob     = surv_obj$surv,
-               conf_low = surv_obj$lower,
-               conf_high= surv_obj$upper,
+           time     = surv_obj$time,
+           prob     = surv_obj$surv,
+           conf_low = surv_obj$lower,
+           conf_high= surv_obj$upper,
 
-               n_risk   = surv_obj$n.risk, # immediately before time t
-               n_event  = surv_obj$n.event,
-               n_censor = surv_obj$n.censor)
+           n_risk   = surv_obj$n.risk, # immediately before time t
+           n_event  = surv_obj$n.event,
+           n_censor = surv_obj$n.censor)
   }
 
 
@@ -168,8 +168,8 @@ prepare_survfit<- function(surv_obj) {
 
                             df %$%
                               tibble(time     = time[xs],
-                                         conf_low = conf_low[ys],
-                                         conf_high= conf_high[ys]) %>%
+                                     conf_low = conf_low[ys],
+                                     conf_high= conf_high[ys]) %>%
                               filter(!(is.na(conf_low) & is.na(conf_high)))
                           }))
   return(out)
@@ -235,7 +235,7 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
     # when there are strata, atrisk_y_inc indicates the relative position from the initial at-risk y pos.
     # atrisk_y_inc<- -0.075 * diff(layer_scales(p)$y$range$range)
     atrisk_y_inc<- -0.05 * max(diff(layer_scales(p)$y$range$range),
-                                diff(p$coordinates$limits$y))
+                               diff(p$coordinates$limits$y))
 
     # extract the color code used in the plot for different strata
     strata_col<- unique(layer_data(p)$colour)
@@ -444,7 +444,7 @@ show_surv<- function(surv_obj,
     plot_prob_d<- plot_prob_d %>%
       mutate(prob= pmin(prob, y_lim[2], na.rm= TRUE),
              # prob= pmax(prob, min(y_lim, na.rm = TRUE), na.rm= TRUE)
-             ) %>%
+      ) %>%
       group_by(strata)
   }
 
@@ -513,12 +513,12 @@ show_surv<- function(surv_obj,
   # }
 
   out<- out + scale_y_continuous(name  = y_lab,
-                           # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
-                           breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                           # expand= c(0.01, 0.005),
-                           expand= c(0.005, 0),
+                                 # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
+                                 breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
+                                 # expand= c(0.01, 0.005),
+                                 expand= c(0.005, 0),
 
-                           labels= scales::percent)
+                                 labels= scales::percent)
 
   out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim) else out
 

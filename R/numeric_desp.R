@@ -16,42 +16,73 @@ numeric_desp<- function(df, group) {
 
   if (rlang::quo_is_missing(group)) {
 
-    sum_stat<- df %>%
-      summarise_if(is.numeric, funs(mean_sd, med_iqr)) %>%
-      rownames_to_column() %>%
-      melt(id.vars= "rowname", value.name = "stat") %>%
-      mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
-             variable= gsub("(_mean_sd|_med_iqr)$", "", variable)) %>%
-      dplyr::select(variable, type, stat)
+    df<- df %>%
+      select_if(is.numeric)
 
     n_var<- df %>%
-      summarise_if(is.numeric, funs(n_avail)) %>%
+      summarise_if(is.numeric, list(~ n_avail(.))) %>%
       rownames_to_column() %>%
       melt(id.vars= "rowname", value.name = "n") %>%
       dplyr::select(-rowname)
 
+    sum_stat<- if (ncol(df)==1) {
+      # the naming rule changes when there is only one numeric variable
+      df %>%
+        summarise_if(is.numeric, list(~ mean_sd(.), ~ med_iqr(.))) %>%
+        rename_at(vars(mean_sd, med_iqr),
+                  function(x) paste(names(df), x, sep= "_")) %>%
+        rownames_to_column() %>%
+        melt(id.vars= "rowname", value.name = "stat") %>%
+        mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
+               variable= gsub("(_mean_sd|_med_iqr)$", "", variable)) %>%
+        dplyr::select(variable, type, stat)
+
+    } else {
+      df %>%
+        summarise_if(is.numeric, list(~ mean_sd(.), ~ med_iqr(.))) %>%
+        rownames_to_column() %>%
+        melt(id.vars= "rowname", value.name = "stat") %>%
+        mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
+               variable= gsub("(_mean_sd|_med_iqr)$", "", variable)) %>%
+        dplyr::select(variable, type, stat)
+
+    }
+
   } else {
 
     df<- df %>%
-      group_by(!!group)
-      # group_by(rlang::UQ(group))
-
-    test_fun<- if (n_groups(df)==2) two_sample_test else if (n_groups(df)>2) k_sample_test
-
-    sum_stat<- df %>%
-      summarise_if(is.numeric, funs(mean_sd, med_iqr)) %>%
-      melt(id.vars= quo_name(group), factorsAsStrings= TRUE) %>%
-      dcast(as.formula(paste("variable", quo_name(group), sep= " ~ "))) %>%
-      mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
-             variable= gsub("(_mean_sd|_med_iqr)$", "", variable)) %>%
-      # adding the p-values
-      # left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
-      left_join(test_fun(df, !!group), by= c("variable", "type"))
+      group_by(!!group) %>%
+      select_if(is.numeric)
 
     n_var<- df %>%
-      summarise_if(is.numeric, funs(n_avail)) %>%
+      summarise_if(is.numeric, list(~ n_avail(.))) %>%
       melt(id.vars= quo_name(group), factorsAsStrings= TRUE) %>%
       dcast(as.formula(paste("variable", quo_name(group), sep= " ~ ")))
+
+    sum_stat<- if (length(grep(group_vars(df), names(df), invert = TRUE))==1) {
+      df %>%
+        summarise_if(is.numeric, list(~ mean_sd(.), ~ med_iqr(.))) %>%
+        rename_at(vars(mean_sd, med_iqr),
+                  function(x) paste(grep(group_vars(df), names(df), invert = TRUE, value= TRUE), x, sep= "_")) %>%
+        melt(id.vars= quo_name(group), factorsAsStrings= TRUE) %>%
+        dcast(as.formula(paste("variable", quo_name(group), sep= " ~ "))) %>%
+        mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
+               variable= gsub("(_mean_sd|_med_iqr)$", "", variable))
+    } else {
+      df %>%
+        summarise_if(is.numeric, list(~ mean_sd(.), ~ med_iqr(.))) %>%
+        melt(id.vars= quo_name(group), factorsAsStrings= TRUE) %>%
+        dcast(as.formula(paste("variable", quo_name(group), sep= " ~ "))) %>%
+        mutate(type= ifelse(grepl("mean_sd$", variable), "meansd", "mediqr"),
+               variable= gsub("(_mean_sd|_med_iqr)$", "", variable))
+    }
+
+    # adding the p-values
+    test_fun<- if (n_groups(df)==2) two_sample_test else if (n_groups(df)>2) k_sample_test
+
+    sum_stat<- sum_stat %>%
+      # left_join(test_fun(df, rlang::UQ(group)), by= c("variable", "type"))
+      left_join(test_fun(df, !!group), by= c("variable", "type"))
 
   }
 
@@ -88,15 +119,22 @@ n_avail<- function(x) formatC( sum( !is.na(x) ), digits= 0, format= "d", big.mar
 mean_sd<- function(x) {
   n_dec<- decimalplaces(x)
 
-  fun<- c(mean, sd)
-  out<- sapply(fun,
+  funs<- c(mean, sd)
+  out<- sapply(funs,
                function(f) {
                  res<- try(f(x, na.rm= TRUE), silent = TRUE)
                  res<- if (class(res)== "try-error") NA else res
                  return(res)
                })
-  out<- formatC( out, digits= n_dec, format= "f", big.mark = ",", flag= "#")
-  out<- paste0(out, collapse = " \u00B1 ") # plusminus sign
+
+  if (length(x[!is.na(x)])==0) {
+    out<- "---"
+  } else if (length(x[!is.na(x)])==1) {
+    out<- formatC( out[1], digits= n_dec, format= "f", big.mark = ",", flag= "#")
+  } else {
+    out<- formatC( out, digits= n_dec, format= "f", big.mark = ",", flag= "#")
+    out<- paste0(out, collapse = " \u00B1 ") # plusminus sign
+  }
 
   out<- c(stat= out)
   out
@@ -116,16 +154,22 @@ med_iqr<- function(x) {
   q3<- function(x, ...) quantile(x, probs = .75, ...)
 
   n_dec<- decimalplaces(x)
-  fun<- c(median, q1, q3)
-  out<- sapply(fun,
+  funs<- c(median, q1, q3)
+  out<- sapply(funs,
                function(f) {
                  res<- try(f(x, na.rm= TRUE), silent = TRUE)
                  res<- if (class(res)== "try-error") NA else res
                  return(res)
                })
-  out<- formatC( out, digits= n_dec, format= "f", big.mark = ",", flag= "#")
-  out<- paste0(out[1], " (",
-               paste0(out[-1], collapse= " \u2013 "), ")") # long dash
+  if (length(x[!is.na(x)])==0) {
+    out<- "---"
+  } else if (length(x[!is.na(x)])==1) {
+    out<- formatC( out[1], digits= n_dec, format= "f", big.mark = ",", flag= "#")
+  } else {
+    out<- formatC( out, digits= n_dec, format= "f", big.mark = ",", flag= "#")
+    out<- paste0(out[1], " (",
+                 paste0(out[-1], collapse= " \u2013 "), ")") # long dash
+  }
 
   out<- c(stat= out)
   out
@@ -156,25 +200,21 @@ two_sample_test<- function(df, group) {
     melt(id.vars= quo_name(group), factorsAsStrings= TRUE, na.rm= TRUE) %>%
     group_by(variable) %>%
     nest() %>%
-    mutate(ttest= map(data,
-                      function(df) {
-                        fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
-                        # fml<- as.formula(paste("value", quo_name(group), sep= " ~ "))
-                        res<- try(t.test(fml, data= df, var.equal = FALSE),
-                                  silent = FALSE)
-                        if (class(res)=="try-error") NA else res$p.value
-                      }),
-           wilcox= map(data,
-                       function(df) {
-                         # if (!is.factor(df[quo_name(group)])) df[quo_name(group)]<- factor(df[quo_name(group)])
-                         fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
-                         # fml<- as.formula(paste("value", quo_name(group), sep= " ~ "))
-                         res<- try(wilcox.test(fml, data= df),
-                                   silent = FALSE)
-                         if (class(res)=="try-error") NA else res$p.value
-                       })) %>%
+    mutate(ttest= map_dbl(data,
+                          function(df) {
+                            fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
+                            res<- try(stats::t.test(fml, data= df, var.equal = FALSE), silent = FALSE)
+                            if (class(res)=="try-error") NA_real_ else res$p.value
+                          }),
+           wilcox= map_dbl(data,
+                           function(df) {
+                             # if (!is.factor(df[quo_name(group)])) df[quo_name(group)]<- factor(df[quo_name(group)])
+                             fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
+                             res<- try(stats::wilcox.test(fml, data= df), silent = FALSE)
+                             if (class(res)=="try-error") NA_real_ else res$p.value
+                           })) %>%
     dplyr::select(-data) %>%
-    unnest() %>%
+    # unnest(cols = c(ttest, wilcox)) %>%
     melt(id.vars= "variable", variable.name= "type", value.name = "pval") %>%
     mutate(type= ifelse(grepl("^ttest", type), "meansd", "mediqr"),
            pval= format_pvalue(pval)
@@ -209,24 +249,20 @@ k_sample_test<- function(df, group) {
     melt(id.vars= quo_name(group), factorsAsStrings= TRUE, na.rm= TRUE) %>%
     group_by(variable) %>%
     nest() %>%
-    mutate(oneway= map(data,
-                       function(df) {
-                         fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
-                         res<- try(oneway.test(fml, data= df, var.equal = FALSE),
-                                   silent = FALSE)
-                         if (class(res)=="try-error") NA else res$p.value
-                       }),
-           kruskal= map(data,
-                        function(df) {
-                          # if (!is.factor(df[quo_name(group)])) df[quo_name(group)]<- as_factor(df[quo_name(group)])
-                          fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
-                          # fml<- as.formula(paste("value", quo_name(group), sep= " ~ "))
-                          res<- try(kruskal.test(fml, data= df),
-                                    silent = FALSE)
-                          if (class(res)=="try-error") NA else res$p.value
-                        })) %>%
+    mutate(oneway= map_dbl(data,
+                           function(df) {
+                             fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
+                             res<- try(stats::oneway.test(fml, data= df, var.equal = FALSE), silent = FALSE)
+                             if (class(res)=="try-error") NA_real_ else res$p.value
+                           }),
+           kruskal= map_dbl(data,
+                            function(df) {
+                              fml<- as.formula(paste0("value ~ factor(", quo_name(group), ")"))
+                              res<- try(stats::kruskal.test(fml, data= df), silent = FALSE)
+                              if (class(res)=="try-error") NA_real_ else res$p.value
+                            })) %>%
     dplyr::select(-data) %>%
-    unnest() %>%
+    # unnest(cols = c(ttest, wilcox)) %>%
     melt(id.vars= "variable", variable.name= "type", value.name = "pval") %>%
     mutate(type= ifelse(grepl("^oneway", type), "meansd", "mediqr"),
            pval= format_pvalue(pval)

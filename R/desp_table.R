@@ -46,11 +46,12 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
 
   if (rlang::quo_is_missing(group)) {
     df<- df %>%
+      ungroup() %>%
       select_if(Negate(is.character)) %>%
       select_if(Negate(is.Date)) %>%
       as.data.frame() %>%
       mutate_if(is.factor, droplevels) %>%
-      as_data_frame()
+      as_tibble()
 
 
     group_var_idx<- NULL
@@ -66,7 +67,7 @@ table_one<- function(df, group, datadic= NULL, var_name, var_desp) {
     group_var_idx<- match(group_vars(df), names(df))
   }
 
-  num_out_lst<- if (any(sapply(if (is.null(group_var_idx)) df else df[-group_var_idx], class)=="numeric")) {
+  num_out_lst<- if (any(sapply(if (is.null(group_var_idx)) df else df[-group_var_idx], class) %in% c("numeric", "integer"))) {
     numeric_desp(df, !!group) %>%
       rownames_to_column("row_id") %>%
       mutate(row_id= paste(variable, type, sep= "_")) %>%

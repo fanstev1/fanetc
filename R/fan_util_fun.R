@@ -7,11 +7,10 @@
 #'
 #' @param x a continous variable
 #' @return the most frequent number of digits in the variable
+#' @export
 decimalplaces <- function(x, max_dec= 4L) {
   y<- x[!is.na(x)]
   y<- round((y %% 1), 10)
-
-
 
   if (length(y) == 0) {
     out<- 0L
