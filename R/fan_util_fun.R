@@ -251,7 +251,8 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
              first_evt=='censored' ~ 0L,
              first_evt=='evt' ~ 1L,
              TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
-    )
+    ) %>%
+    ungroup()
 
   # per documentation, evt will be treated as a factor with the 1st level as censoring
   # in the situtation in which no pts are censored, no observations have a value of zero.
@@ -290,7 +291,6 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   }
 
   tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
-
 
   if (!append) tmp_df else {
     df %>%
