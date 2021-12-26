@@ -429,8 +429,17 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 #' The function summarize the fitted KM at the time points specified by a user.
 #'
 #' @export
-summarize_km<- function(fit, times= NULL) {
+summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
   ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
+  if (failure_fun) {
+    ff<- 1 - ss$surv
+    ll<- 1 - ss$upper
+    uu<- 1 - ss$lower
+
+    ss$surv<- ff
+    ss$lower<- ll
+    ss$upper<- uu
+  }
 
   out<- if (any(names(fit)=="strata")) {
 
@@ -579,7 +588,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
                    vv<- L %*% beta_var %*% t(L)
                    cc<- L %*% coef(mdl)
 
-                   # calcualte Wald's test statistics and p-value
+                   # calculate Wald's test statistics and p-value
                    wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )
                    pval<- pchisq(wald_stat,
                                  df= if (any(class(mdl)=="coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
@@ -739,7 +748,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
   # average betas and vcov cross MI mdls
   mean_betas<- purrr::reduce(betas, .f= `+`)/m
-  with_var<- purrr::reduce(vars, .f= `+`)/m # with MI
+  with_var<- purrr::reduce(vars, .f= `+`)/m # within MI
   # between-MI vcov
   btwn_var<- lapply(betas, function(cc) (cc - mean_betas) %*% t(cc - mean_betas)) %>%
     purrr::reduce(.f= `+`)/(m-1)
@@ -755,7 +764,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
                  vv<- L %*% with_var %*% t(L) # with-mi vcov for beta
                  v2<- L %*% btwn_var %*% t(L) # btwn-mi vcov for beta
 
-                 # calcualte Wald's test statistics and p-value
+                 # calculate Wald's test statistics and p-value
                  rm<- (1 + 1/m) * sum(diag(v2 %*% solve(vv))) # eqn (1.18) without dividing by k
                  wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )/(df + rm) # eqn (1.17)
                  # expr (1.19)
