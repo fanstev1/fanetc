@@ -692,6 +692,7 @@ calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
 #' @export
 summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun= NULL) {
 
+  out<- calculate_type3_mi(mira_obj, vcov_fun= vcov_fun)
   # # to calulate the type 3 error
   # # Li, Meng, Raghunathan and Rubin. Significance levels from repeated p-values with multiply-imputed data. Statistica Sinica (1991)
   # # x<- model.matrix(mira_obj$analyses[[1]])
@@ -740,7 +741,6 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
   #                           stat= wald_stat,
   #                           chisq_p= pval)
   #              })
-  out<- calculate_type3_mi(mira_obj, vcov_fun)
   # names(out)<- c('(Intercept)',
   #                attr(tmp$terms, "term.labels"))
 
@@ -751,32 +751,37 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
 
   type3_out<- out %>%
     bind_rows() %>%
-    mutate(pval= format_pvalue(chisq_p)) %>%
+    mutate(pval= format_pvalue(chisq_p))
+
+  glm_out<- MIcombine(MIextract(mira_obj$analyses, fun= coef),
+                      MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)) %$%
+    data.frame(est= coefficients,
+               se = sqrt(diag(variance))) %>%
+    rownames_to_column(var= "term") %>%
+    right_join(out_tmp, by= "term") %>%
+    mutate(conf_low = est - qnorm(0.975) * se,
+           conf_high= est + qnorm(0.975) * se,
+           est      = if (exponentiate) exp(est) else est,
+           conf_low = if (exponentiate) exp(conf_low) else conf_low,
+           conf_high= if (exponentiate) exp(conf_high) else conf_high,
+           stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
+           pval= type3_out$pval[charmatch(gsub("TRUE$", "", term), type3_out$var)]) %>%
+    select(term, stat, pval, rid, everything())  %>%
+    rename(var= term)
+
+    # mutate(var= as.character(term),
+    #        # est      = if (exponentiate) exp(est) else est,
+    #        # conf_low = if (exponentiate) exp(conf_low) else conf_low,
+    #        # conf_high= if (exponentiate) exp(conf_high) else conf_high,
+    #        stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
+    #        pval= format_pvalue(pval)) %>%
+    # dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
+    # full_join(out_tmp, by= c("var" = "term"))
+
+
+  type3_out<- type3_out %>%
     filter(df>1) %>%
     dplyr::select(var, pval, rid)
-
-  glm_out<- mira_obj %>%
-    pool() %>%
-    summary(conf.int = TRUE,
-            conf.level = 1-alpha,
-            exponentiate= exponentiate) %>%
-    rename(est      = estimate,
-           pval     = p.value,
-           conf_low = `2.5 %`,
-           conf_high= `97.5 %`) %>%
-    mutate(var= as.character(term),
-           # est      = if (exponentiate) exp(est) else est,
-           # conf_low = if (exponentiate) exp(conf_low) else conf_low,
-           # conf_high= if (exponentiate) exp(conf_high) else conf_high,
-           stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
-           pval= format_pvalue(pval)) %>%
-    dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
-    full_join(out_tmp, by= c("var" = "term"))
-
-
-  # type3_out<- type3_out %>%
-  #   filter(df>1) %>%
-  #   dplyr::select(var, pval, rid)
 
   glm_out %>%
     bind_rows(type3_out) %>%
@@ -877,9 +882,6 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
            conf_low = `2.5 %`,
            conf_high= `97.5 %`) %>%
     mutate(var= as.character(term),
-           # est      = if (exponentiate) exp(est) else est,
-           # conf_low = if (exponentiate) exp(conf_low) else conf_low,
-           # conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
            pval= format_pvalue(pval)) %>%
     dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
