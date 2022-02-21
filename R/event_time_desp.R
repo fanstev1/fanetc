@@ -346,7 +346,7 @@ run_logrank_test<- function(surv_obj) {
 #' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
 #' @param plot_cdf a logical scalar (default= FALSE) indiciates if the CDF (instead of) survival function should be plotted.
 #' @return A ggplot object.
-#' @example
+#' @examples
 #' my_plot_theme<- theme_bw() +
 #' theme(axis.title  = element_text(size= 14, family="Arial"),
 #'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
@@ -644,7 +644,7 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
 #' @param plot_cdf Not used
 #' @return A ggplot object.
-#' @example
+#' @examples
 #' my_plot_theme<- theme_bw() +
 #' theme(axis.title  = element_text(size= 14, family="Arial"),
 #'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),

@@ -61,3 +61,39 @@ show_surv
 \details{
 The function shows the survival function with and without strata.
 }
+\examples{
+my_plot_theme<- theme_bw() +
+theme(axis.title  = element_text(size= 14, family="Arial"),
+      axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
+      axis.title.y= element_text(margin= unit(c(t= 0, r = 1, b = 0, l = 0), "lines"), family="Arial"),
+      axis.text   = element_text(size= 12, family="Arial"),
+      # set the axis line (i.e. bty= "l" in traditional plot)
+      axis.line.x = element_line(color="black", size = 1),
+      axis.line.y = element_line(color="black", size = 1),
+
+      # specify the legend (e.g. position, color, justification)
+      legend.title= element_blank(),
+      legend.background= element_rect(fill= "transparent"),
+      legend.text      = element_text(family= "Arial", size = 12),
+      legend.margin    = margin(t = 0, r = 0, b = 0, l = 0,"bigpts"),
+      legend.key       = element_rect(fill= "transparent", color= "transparent", linetype= "blank"),
+      legend.key.size  = unit(24, "bigpts"),
+      # legend.position= c(0.98, 0.02),
+      # legend.justification= c(1, 0),
+
+      #eliminates background, gridlines, and chart border
+      panel.border = element_blank(),
+      # plot.background = element_blank(),
+      # panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.spacing = unit(1, "lines"),
+
+      strip.background = element_rect(fill = "black", color= "white"),
+      strip.text = element_text(family = "Arial", color= "white", size = 12, face= "bold"),
+
+      # plot margin. Sufficient margins must be specified for printing at-risk patients.
+      plot.margin= unit(c(top= 0.1, right= 0.05, bottom= .3, left= .2), "npc"))
+
+cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
+admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+}

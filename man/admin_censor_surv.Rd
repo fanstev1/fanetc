@@ -35,3 +35,8 @@ The newly created variables are named by the same variables names but with a suf
 variables can be overwritten by specifying overwrite_var= TRUE. Overwriting the original variables is not recommended, but
 it can be useful in some situations.
 }
+\examples{
+aml \%>\% admin_censor_surv(evt_time= time, evt= status) # No admin censoring
+aml \%>\% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
+aml \%>\% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
+}

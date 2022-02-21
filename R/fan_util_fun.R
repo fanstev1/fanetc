@@ -124,7 +124,7 @@ recode_missing<- function(x, na.value= NULL) {
 #' @param patid the variable indicating subject/patient id
 #' @param surv_varname an option of character vector of length 2, the 1st of which is the name of the time variable; the other is the name of the event indicator.
 #' @return A data frame with patid, evt_time and evt.
-#' @example
+#' @examples
 #' set.seed(0)
 #' nn<- 100
 #' test<- data.frame(idx_dt= as.Date("1970-01-01"),
@@ -323,7 +323,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
 #' @param adm_cnr_time a numeric scalar specifying the time point at which administrative censoring is applied.
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
 #' @return The input data plus censored time-to-event variables.
-#' @example
+#' @examples
 #' aml %>% admin_censor_surv(evt_time= time, evt= status) # No admin censoring
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
@@ -374,7 +374,7 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
 #' @param evt_label a numeric vector specifying the time point at which administrative censoring is applied.
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
 #' @return The input data plus censored time-to-event variables.
-#' @example
+#' @examples
 #' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 #' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
 #' @export
@@ -890,4 +890,83 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     arrange(rid, var) %>%
     select(var, stat, pval, everything())
   # bind_rows(cox_out, type3_out) %>% arrange(rid, var)
+}
+
+generate_mi_glm_termplot_df<- function(mira_obj,
+                                       terms,
+                                       center_at= NULL,
+                                       vcov_fun= NULL, ...) {
+  require(mitools)
+  betas <- MIextract(mira_obj$analyses,
+                     fun = coef)
+  vars  <- MIextract(mira_obj$analyses,
+                     fun = if (is.null(vcov_fun)) vcov else vcov_fun)
+  mi_res<- MIcombine(betas, vars)
+
+  dummy_mdl<- getfit(mira_obj, 1L)
+  tt<- stats::terms(dummy_mdl)
+  cn<- attr(tt, "term.labels")[terms]
+  varseq<- attr(mm_orig<- model.matrix(dummy_mdl), "assign")
+
+  # construct the design matrix
+  # mm<- matrix(apply(mm_orig, 2, mean),
+  #             nrow= nrow(plot_d),
+  #             ncol = length(varseq),
+  #             byrow = T)
+  # colnames(mm)<- colnames(mm_orig)
+  # rownames(mm)<- plot_d$x
+  # mm[, varseq %in% c(0, terms)]<- model.matrix(as.formula(paste("~ ", cn)), data= tmp)
+
+  carrier.name <- function(term) {
+    if (length(term) > 1L)
+      carrier.name(term[[2L]])
+    else as.character(term)
+  }
+
+  dummy_mdl$coefficients<- mi_res$coefficients
+  plot_d<- termplot(dummy_mdl, terms= terms, plot= FALSE)
+
+  plot_d<- mapply(function(df, cc, var, tt) {
+
+    mm<- matrix(apply(mm_orig, 2, mean),
+                nrow = nrow(df),
+                ncol = length(varseq),
+                byrow = T)
+    colnames(mm)<- colnames(mm_orig)
+    rownames(mm)<- df$x
+
+    # calculate fitted value
+    df<- if (!is.null(cc)) {
+      which_x<- if (is.factor(df$x)) {
+        which(df$x==cc)
+      } else if (is.logical(df$x)) {
+        which(!df$x)
+      } else {
+        min(which(df$x>=cc))
+      }
+      mutate(df, y = y - y[which_x])
+    } else df
+
+    # now calculate the standard error
+    tmp<- df
+    names(tmp)<- gsub("x", sapply(str2expression(var), carrier.name), names(tmp))
+    mm[, tt == varseq]<- (model.matrix(as.formula(paste("~ ", var)), data= tmp)[,-1])
+    df$se<- sqrt(diag(mm %*% mi_res$variance %*% t(mm)))
+
+    df %>%
+      mutate(conf_low= y - qnorm(0.975) * se,
+             conf_high= y + qnorm(0.975) * se)
+  },
+  df= plot_d,
+  cc= center_at,
+  var= cn, #sapply(str2expression(cn), carrier.name),
+  tt= terms,
+  SIMPLIFY = FALSE)
+
+  # the next two (commented out) lines to check if I constructed the design matrix correctly
+  # they should equal plot_d$y
+  # xx<- as.numeric(mm %*% mi_res$coefficients)
+  # xx<- xx - xx[which_x]
+
+  plot_d
 }
