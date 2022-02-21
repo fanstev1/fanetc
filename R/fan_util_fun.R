@@ -896,18 +896,13 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
 #' @export
 generate_mi_glm_termplot_df<- function(mira_obj,
-                                       terms,
+                                       terms= NULL,
                                        center_at= NULL,
                                        vcov_fun= NULL, ...) {
   require(mitools)
-  betas <- MIextract(mira_obj$analyses,
-                     fun = coef)
-  vars  <- MIextract(mira_obj$analyses,
-                     fun = if (is.null(vcov_fun)) vcov else vcov_fun)
-  mi_res<- MIcombine(betas, vars)
-
   dummy_mdl<- getfit(mira_obj, 1L)
   tt<- stats::terms(dummy_mdl)
+  terms<- if (is.null(terms)) length(labels(tt)) else terms
   cn<- attr(tt, "term.labels")[terms]
   varseq<- attr(mm_orig<- model.matrix(dummy_mdl), "assign")
 
@@ -917,7 +912,16 @@ generate_mi_glm_termplot_df<- function(mira_obj,
     else as.character(term)
   }
 
+  betas <- MIextract(mira_obj$analyses,
+                     fun = coef)
+
+  vars  <- MIextract(mira_obj$analyses,
+                     fun = if (is.null(vcov_fun)) vcov else vcov_fun)
+
+  mi_res<- MIcombine(betas, vars)
+
   dummy_mdl$coefficients<- mi_res$coefficients
+
   plot_d<- termplot(dummy_mdl, terms= terms, plot= FALSE)
 
   plot_d<- mapply(function(df, cc, var, tt) {
@@ -952,7 +956,7 @@ generate_mi_glm_termplot_df<- function(mira_obj,
              conf_high= y + qnorm(0.975) * se)
   },
   df= plot_d,
-  cc= center_at,
+  cc= if (is.null(center_at)) vector("list", length(terms)) else center_at,
   var= cn,
   tt= terms,
   SIMPLIFY = FALSE)
