@@ -759,8 +759,8 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
                se = sqrt(diag(variance))) %>%
     rownames_to_column(var= "term") %>%
     right_join(out_tmp, by= "term") %>%
-    mutate(conf_low = est - qnorm(0.975) * se,
-           conf_high= est + qnorm(0.975) * se,
+    mutate(conf_low = est - qnorm(1-alpha/2) * se,
+           conf_high= est + qnorm(1-alpha/2) * se,
            est      = if (exponentiate) exp(est) else est,
            conf_low = if (exponentiate) exp(conf_low) else conf_low,
            conf_high= if (exponentiate) exp(conf_high) else conf_high,
@@ -894,6 +894,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
   # bind_rows(cox_out, type3_out) %>% arrange(rid, var)
 }
 
+#' @export
 generate_mi_glm_termplot_df<- function(mira_obj,
                                        terms,
                                        center_at= NULL,
@@ -909,15 +910,6 @@ generate_mi_glm_termplot_df<- function(mira_obj,
   tt<- stats::terms(dummy_mdl)
   cn<- attr(tt, "term.labels")[terms]
   varseq<- attr(mm_orig<- model.matrix(dummy_mdl), "assign")
-
-  # construct the design matrix
-  # mm<- matrix(apply(mm_orig, 2, mean),
-  #             nrow= nrow(plot_d),
-  #             ncol = length(varseq),
-  #             byrow = T)
-  # colnames(mm)<- colnames(mm_orig)
-  # rownames(mm)<- plot_d$x
-  # mm[, varseq %in% c(0, terms)]<- model.matrix(as.formula(paste("~ ", cn)), data= tmp)
 
   carrier.name <- function(term) {
     if (length(term) > 1L)
@@ -961,7 +953,7 @@ generate_mi_glm_termplot_df<- function(mira_obj,
   },
   df= plot_d,
   cc= center_at,
-  var= cn, #sapply(str2expression(cn), carrier.name),
+  var= cn,
   tt= terms,
   SIMPLIFY = FALSE)
 
