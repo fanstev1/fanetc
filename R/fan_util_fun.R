@@ -489,7 +489,7 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
 #' @title summarize_cif
 #'
 #' @details
-#' The function summarize the fitted CIF at the time points specified by a user.
+#' The function summarizes the fitted CIF at the time points specified by a user.
 #'
 #' @export
 summarize_cif<- function(fit, times= NULL) {
@@ -543,7 +543,7 @@ summarize_cif<- function(fit, times= NULL) {
 #' @title summarize_coxph
 #'
 #' @details
-#' The function summarize the fitted cox model and calculate the type 3 error.
+#' The function summarizes the fitted cox model with the type 3 error based on Wald's statistics.
 #'
 #' @export
 summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
@@ -622,39 +622,27 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
   out
 }
 
+#' @title calculate_type3_mi
+#'
+#' @details
+#' The function calculates the  3 p-values based on Wald's statistics.
+#'
 #' @export
-summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
-  # mira_obj<- adj_t
-  glm_out<- mira_obj %>%
-    pool() %>%
-    summary(conf.int = TRUE, conf.level = 1-alpha, exponentiate= exponentiate) %>%
-    # as.data.frame() %>%
-    # rownames_to_column("var") %>%
-    rename(est      = estimate,
-           pval     = p.value,
-           conf_low = `2.5 %`,
-           conf_high= `97.5 %`) %>%
-    mutate(var= as.character(term),
-           # est      = if (exponentiate) exp(est) else est,
-           # conf_low = if (exponentiate) exp(conf_low) else conf_low,
-           # conf_high= if (exponentiate) exp(conf_high) else conf_high,
-           # stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
-           #               formatC(conf_low,  digits = 3, format= "f", flag= "#"), ", ",
-           #               formatC(conf_high, digits = 3, format= "f", flag= "#"), "]"),
-           stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
-           pval= format_pvalue(pval)) %>%
-    dplyr::select(var, stat, pval, est, conf_low, conf_high)
+calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
+  require(mitools)
+  require(sandwich)
 
   # to calulate the type 3 error
-  # Li, Meng, Raghunathan and Rubin. Significance levels from repated p-values with multiply-imputed data. Statistica Sinica (1991)
-  x<- model.matrix(mira_obj$analyses[[1]])
+  # Li, Meng, Raghunathan and Rubin. Significance levels from repeated p-values with multiply-imputed data. Statistica Sinica (1991)
+  # x<- model.matrix(mira_obj$analyses[[1]])
+  x<- model.matrix(tmp<- getfit(mira_obj, 1L))
   varseq<- attr(x, "assign")
   df<- sapply(split(varseq, varseq), length)
   m <- length(mira_obj$analyses)
 
   # coef estimate and its vcov for each MI model
-  betas<- mitools::MIextract(mira_obj$analyses, fun= coef)
-  vars <- mitools::MIextract(mira_obj$analyses, fun= vcov)
+  betas<- MIextract(mira_obj$analyses, fun= coef)
+  vars <- MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)
 
   # average betas and vcov cross MI mdls
   mean_betas<- purrr::reduce(betas, .f= `+`)/m
@@ -687,37 +675,201 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05) {
 
                  pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
 
-                 data.frame(df= round(df, 0),
-                            stat= wald_stat,
-                            chisq_p= pval)
+                 out<- data.frame(var= if (i==0) '(Intercept)' else attr(tmp$terms, "term.labels")[i],
+                                  rid = i,
+                                  df= round(df, 0),
+                                  stat= wald_stat,
+                                  chisq_p= pval)
+                 attr(out, "col_in_X")<- data.frame(term= colnames(x)[i==varseq],
+                                                    rid= i,
+                                                    stringsAsFactors = FALSE)
+                 out
                })
-  names(out)<- c('(Intercept)',
-                 attr(mira_obj$analyses[[1]]$terms, "term.labels")[unique(varseq)])
+  out
+}
+
+
+#' @export
+summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun= NULL) {
+
+  # # to calulate the type 3 error
+  # # Li, Meng, Raghunathan and Rubin. Significance levels from repeated p-values with multiply-imputed data. Statistica Sinica (1991)
+  # # x<- model.matrix(mira_obj$analyses[[1]])
+  # x<- model.matrix(tmp<- getfit(mira_obj, 1L))
+  # varseq<- attr(x, "assign")
+  # df<- sapply(split(varseq, varseq), length)
+  # m <- length(mira_obj$analyses)
+  #
+  # # coef estimate and its vcov for each MI model
+  # betas<- MIextract(mira_obj$analyses, fun= coef)
+  # vars <- MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)
+  #
+  # # average betas and vcov cross MI mdls
+  # mean_betas<- purrr::reduce(betas, .f= `+`)/m
+  # with_var<- purrr::reduce(vars, .f= `+`)/m # with MI
+  # # between-MI vcov
+  # btwn_var<- lapply(betas, function(cc) (cc - mean_betas) %*% t(cc - mean_betas)) %>%
+  #   purrr::reduce(.f= `+`)/(m-1)
+  #
+  # out<- lapply(unique(varseq),
+  #              function(i){
+  #                df<- sum(varseq==i)
+  #                # set out the contrast matrix
+  #                L<- matrix(0, nrow= df, ncol= ncol(x))
+  #                L[, varseq==i]<- diag(df)
+  #
+  #                cc<- L %*% mean_betas
+  #                vv<- L %*% with_var %*% t(L) # with-mi vcov for beta
+  #                v2<- L %*% btwn_var %*% t(L) # btwn-mi vcov for beta
+  #
+  #                # calcualte Wald's test statistics and p-value
+  #                rm<- (1 + 1/m) * sum(diag(v2 %*% solve(vv))) # eqn (1.18) without dividing by k
+  #                wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )/(df + rm) # eqn (1.17)
+  #                # expr (1.19)
+  #                nu<- df * (m-1)
+  #                df_denominator<- if (nu> 4) {
+  #                  4 + (nu-4)*(1 + (1-2/nu)/(rm/df))^2
+  #                } else {
+  #                  0.5*(m-1)*(df+1)*(1+1/(rm/df))^2
+  #                }
+  #
+  #                pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
+  #
+  #                data.frame(rid = i,
+  #                           df= round(df, 0),
+  #                           stat= wald_stat,
+  #                           chisq_p= pval)
+  #              })
+  out<- calculate_type3_mi(mira_obj, vcov_fun)
+  # names(out)<- c('(Intercept)',
+  #                attr(tmp$terms, "term.labels"))
+
+  # the order of the variables in the output
+  out_tmp<- out %>%
+    lapply(function(x) attr(x, "col_in_X")) %>%
+    bind_rows()
 
   type3_out<- out %>%
-    bind_rows(.id= "var") %>%
+    bind_rows() %>%
     mutate(pval= format_pvalue(chisq_p)) %>%
     filter(df>1) %>%
-    dplyr::select(var, pval)
+    dplyr::select(var, pval, rid)
 
-  type3_out$rid<- sapply(type3_out$var,
-                         function(x) min(grep(x, glm_out$var, ignore.case = TRUE)))
+  glm_out<- mira_obj %>%
+    pool() %>%
+    summary(conf.int = TRUE,
+            conf.level = 1-alpha,
+            exponentiate= exponentiate) %>%
+    rename(est      = estimate,
+           pval     = p.value,
+           conf_low = `2.5 %`,
+           conf_high= `97.5 %`) %>%
+    mutate(var= as.character(term),
+           # est      = if (exponentiate) exp(est) else est,
+           # conf_low = if (exponentiate) exp(conf_low) else conf_low,
+           # conf_high= if (exponentiate) exp(conf_high) else conf_high,
+           stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
+           pval= format_pvalue(pval)) %>%
+    dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
+    full_join(out_tmp, by= c("var" = "term"))
+
+
+  # type3_out<- type3_out %>%
+  #   filter(df>1) %>%
+  #   dplyr::select(var, pval, rid)
 
   glm_out %>%
-    mutate(rid= 1:n()) %>%
     bind_rows(type3_out) %>%
     arrange(rid, var) %>%
-    select(-rid)
+    select(var, stat, pval, everything())
+
+  # type3_out<- out %>%
+  #   bind_rows(.id= "var") %>%
+  #   mutate(pval= format_pvalue(chisq_p)) %>%
+  #   filter(df>1) %>%
+  #   dplyr::select(var, pval)
+  #
+  # type3_out$rid<- sapply(type3_out$var,
+  #                        function(x) min(grep(x, glm_out$var, ignore.case = TRUE)))
+  #
+  # glm_out %>%
+  #   mutate(rid= 1:n()) %>%
+  #   bind_rows(type3_out) %>%
+  #   arrange(rid, var) %>%
+  #   select(-rid)
 }
 
 #' @export
 summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
+  # # to calulate the type 3 error
+  # # Li, Meng, Raghunathan and Rubin. Significance levels from repated p-values with multiply-imputed data. Statistica Sinica (1991)
+  # # x<- model.matrix(cox_mira$analyses[[1]])
+  # x<- model.matrix(tmp<- getfit(cox_mira, 1L))
+  # varseq<- attr(x, "assign")
+  # df<- sapply(split(varseq, varseq), length)
+  # m <- length(cox_mira$analyses)
+  #
+  # # coef estimate and its vcov for each MI model
+  # betas<- MIextract(cox_mira$analyses, fun= coef)
+  # vars <- MIextract(cox_mira$analyses, fun= vcov)
+  #
+  # # average betas and vcov cross MI mdls
+  # mean_betas<- purrr::reduce(betas, .f= `+`)/m
+  # with_var<- purrr::reduce(vars, .f= `+`)/m # within MI
+  # # between-MI vcov
+  # btwn_var<- lapply(betas, function(cc) (cc - mean_betas) %*% t(cc - mean_betas)) %>%
+  #   purrr::reduce(.f= `+`)/(m-1)
+  #
+  # out<- lapply(unique(varseq),
+  #              function(i){
+  #                df<- sum(varseq==i)
+  #                # set out the contrast matrix
+  #                L<- matrix(0, nrow= df, ncol= ncol(x))
+  #                L[, varseq==i]<- diag(df)
+  #
+  #                cc<- L %*% mean_betas
+  #                vv<- L %*% with_var %*% t(L) # with-mi vcov for beta
+  #                v2<- L %*% btwn_var %*% t(L) # btwn-mi vcov for beta
+  #
+  #                # calculate Wald's test statistics and p-value
+  #                rm<- (1 + 1/m) * sum(diag(v2 %*% solve(vv))) # eqn (1.18) without dividing by k
+  #                wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )/(df + rm) # eqn (1.17)
+  #                # expr (1.19)
+  #                nu<- df * (m-1)
+  #                df_denominator<- if (nu> 4) {
+  #                  4 + (nu-4)*(1 + (1-2/nu)/(rm/df))^2
+  #                } else {
+  #                  0.5*(m-1)*(df+1)*(1+1/(rm/df))^2
+  #                }
+  #
+  #                pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
+  #
+  #                data.frame(rid = i,
+  #                           df= round(df, 0),
+  #                           stat= wald_stat,
+  #                           chisq_p= pval)
+  #              })
+  out<- calculate_type3_mi(cox_mira)
+  # names(out)<- attr(tmp$terms, "term.labels")[unique(varseq)]
+  # the order of the variables in the output
+  out_tmp<- out %>%
+    lapply(function(x) attr(x, "col_in_X")) %>%
+    bind_rows()
+
+  type3_out<- out %>%
+    bind_rows() %>%
+    mutate(pval= format_pvalue(chisq_p)) %>%
+    filter(df>1) %>%
+    dplyr::select(var, pval, rid)
+
   cox_out<- cox_mira %>%
     # pool() %>%
     # see https://github.com/amices/mice/issues/246#
     pool(dfcom = getfit(., 1L)$nevent - length(coef(getfit(., 1L)))) %>%
-    summary(conf.int = TRUE, conf.level = 1-alpha, exponentiate= exponentiate) %>%
+    summary(conf.int = TRUE,
+            conf.level = 1-alpha,
+            exponentiate= exponentiate) %>%
     # as.data.frame() %>%
     # rownames_to_column("var") %>%
     rename(est      = estimate,
@@ -729,64 +881,13 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
            # conf_low = if (exponentiate) exp(conf_low) else conf_low,
            # conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
-           # stat= paste0( formatC(est,       digits = 3, format= "f", flag= "#"), " [",
-           #               formatC(conf_low,  digits = 3, format= "f", flag= "#"), ", ",
-           #               formatC(conf_high, digits = 3, format= "f", flag= "#"), "]"),
            pval= format_pvalue(pval)) %>%
-    dplyr::select(var, stat, pval, est, conf_low, conf_high)
+    dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
+    full_join(out_tmp, by= c("var" = "term"))
 
-  # to calulate the type 3 error
-  # Li, Meng, Raghunathan and Rubin. Significance levels from repated p-values with multiply-imputed data. Statistica Sinica (1991)
-  x<- model.matrix(cox_mira$analyses[[1]])
-  varseq<- attr(x, "assign")
-  df<- sapply(split(varseq, varseq), length)
-  m <- length(cox_mira$analyses)
-
-  # coef estimate and its vcov for each MI model
-  betas<- mitools::MIextract(cox_mira$analyses, fun= coef)
-  vars <- mitools::MIextract(cox_mira$analyses, fun= vcov)
-
-  # average betas and vcov cross MI mdls
-  mean_betas<- purrr::reduce(betas, .f= `+`)/m
-  with_var<- purrr::reduce(vars, .f= `+`)/m # within MI
-  # between-MI vcov
-  btwn_var<- lapply(betas, function(cc) (cc - mean_betas) %*% t(cc - mean_betas)) %>%
-    purrr::reduce(.f= `+`)/(m-1)
-
-  out<- lapply(unique(varseq),
-               function(i){
-                 df<- sum(varseq==i)
-                 # set out the contrast matrix
-                 L<- matrix(0, nrow= df, ncol= ncol(x))
-                 L[, varseq==i]<- diag(df)
-
-                 cc<- L %*% mean_betas
-                 vv<- L %*% with_var %*% t(L) # with-mi vcov for beta
-                 v2<- L %*% btwn_var %*% t(L) # btwn-mi vcov for beta
-
-                 # calculate Wald's test statistics and p-value
-                 rm<- (1 + 1/m) * sum(diag(v2 %*% solve(vv))) # eqn (1.18) without dividing by k
-                 wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )/(df + rm) # eqn (1.17)
-                 # expr (1.19)
-                 nu<- df * (m-1)
-                 df_denominator<- if (nu> 4) {
-                   4 + (nu-4)*(1 + (1-2/nu)/(rm/df))^2
-                 } else {
-                   0.5*(m-1)*(df+1)*(1+1/(rm/df))^2
-                 }
-
-                 pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
-
-                 data.frame(df= round(df, 0),
-                            stat= wald_stat,
-                            chisq_p= pval)
-               })
-  names(out)<- attr(cox_mira$analyses[[1]]$terms, "term.labels")[unique(varseq)]
-
-  type3_out<- plyr::ldply(out, .id= "var") %>%
-    mutate(pval= format_pvalue(chisq_p)) %>%
-    filter(df>1) %>%
-    dplyr::select(var, pval)
-
-  bind_rows(cox_out, type3_out) %>% arrange(var)
+  cox_out %>%
+    bind_rows(type3_out) %>%
+    arrange(rid, var) %>%
+    select(var, stat, pval, everything())
+  # bind_rows(cox_out, type3_out) %>% arrange(rid, var)
 }

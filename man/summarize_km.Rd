@@ -4,7 +4,7 @@
 \alias{summarize_km}
 \title{summarize_km}
 \usage{
-summarize_km(fit, times = NULL)
+summarize_km(fit, times = NULL, failure_fun = FALSE)
 }
 \description{
 summarize_km

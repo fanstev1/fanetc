@@ -4,15 +4,26 @@
 \alias{show_surv}
 \title{show_surv}
 \usage{
-show_surv(surv_obj, x_lab = "Time", y_lab = if (plot_cdf)
-  "The proportion of deceased subjects" else "The freedom from death",
-  y_lim = NULL, x_break = NULL, y_break = NULL,
+show_surv(
+  surv_obj,
+  x_lab = "Time",
+  y_lab = if (plot_cdf) "The proportion of deceased subjects" else
+    "The freedom from death",
+  y_lim = NULL,
+  x_break = NULL,
+  y_break = NULL,
   color_scheme = c("brewer", "grey", "viridis", "manual"),
-  color_list = NULL, plot_theme = theme_minimal(), add_ci = TRUE,
-  add_atrisk = TRUE, add_legend = FALSE, add_pvalue = TRUE,
-  atrisk_init_pos = NULL, pvalue_pos = c("topleft", "topright",
-  "bottomleft", "bottomright", "left", "right", "top", "bottom"),
-  plot_cdf = FALSE)
+  color_list = NULL,
+  plot_theme = theme_minimal(),
+  add_ci = TRUE,
+  add_atrisk = TRUE,
+  add_legend = FALSE,
+  add_pvalue = TRUE,
+  atrisk_init_pos = NULL,
+  pvalue_pos = c("topleft", "topright", "bottomleft", "bottomright", "left", "right",
+    "top", "bottom"),
+  plot_cdf = FALSE
+)
 }
 \arguments{
 \item{surv_obj}{a numeric vector recording the time points at which the event occurs.}
@@ -23,11 +34,11 @@ show_surv(surv_obj, x_lab = "Time", y_lab = if (plot_cdf)
 
 \item{y_lim}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
 
-\item{color_list}{input data}
+\item{color_list}{a list containing the parameter values for scale_color_manual() or scale_fill_manual()}
 
-\item{plot_theme}{a numeric vector recording the time points at which the event occurs.}
+\item{plot_theme}{a user-specify ggplot theme.}
 
-\item{add_ci}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
+\item{add_ci}{logical parameter indicating whether a pointwise 95% confidence interval should be added.}
 
 \item{add_atrisk}{a logical parameter indicating whether at-risk table should be added to the figure.}
 

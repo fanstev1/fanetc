@@ -485,33 +485,6 @@ show_surv<- function(surv_obj,
       eval(fill_fun)
   }
 
-
-  # out<- if (plot_cdf) {
-  #
-  #   # failure function
-  #   failure<- scales::trans_new(name= "failure",
-  #                               transform = function(x) 1-x,
-  #                               inverse   = function(y) 1-y,
-  #                               breaks    = scales::trans_breaks(trans= function(x) 1-x, inv= function(y) 1-y,  n=6),
-  #                               format    = scales::percent)
-  #
-  #   out + scale_y_continuous(name  = y_lab,
-  #                            # name  = if (is.null(y_lab)) "Proportion of deceased subjects" else y_lab,
-  #                            breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-  #                            expand= c(0.01, 0.005),
-  #
-  #                            trans = failure,
-  #                            labels= scales::trans_format(trans= function(x) 1- x, format = scales::percent_format()))
-  # } else {
-  #   # survival function
-  #   out + scale_y_continuous(name  = y_lab,
-  #                            # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
-  #                            breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-  #                            expand= c(0.01, 0.005),
-  #
-  #                            labels= scales::percent)
-  # }
-
   out<- out + scale_y_continuous(name  = y_lab,
                                  # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
                                  breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,

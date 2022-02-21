@@ -4,8 +4,14 @@
 \alias{format_pvalue}
 \title{format_pvalue}
 \usage{
-format_pvalue(x, eps = 0.001, trim = TRUE, droptrailing0 = FALSE,
-  pad = FALSE, ...)
+format_pvalue(
+  x,
+  eps = 0.001,
+  trim = TRUE,
+  droptrailing0 = FALSE,
+  pad = FALSE,
+  ...
+)
 }
 \arguments{
 \item{x}{Numeric variable}

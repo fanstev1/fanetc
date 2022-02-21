@@ -4,16 +4,29 @@
 \alias{show_cif}
 \title{show_cif}
 \usage{
-show_cif(surv_obj, evt_type = 1, evt_label = function(x) {    
-  recode_factor(x, `1` = "Event", `2` = "Competing event", .default =
-  "Event free") }, add_ci = TRUE, add_atrisk = TRUE,
-  add_legend = FALSE, add_pvalue = TRUE, atrisk_init_pos = NULL,
-  pvalue_pos = c("bottomright", "topleft", "topright", "bottomleft",
-  "left", "right", "top", "bottom"), plot_theme = theme_minimal(),
-  x_lab = "Time", y_lab = "Proportion of subjects", x_lim = NULL,
-  y_lim = NULL, x_break = NULL, y_break = NULL,
+show_cif(
+  surv_obj,
+  evt_type = 1,
+  evt_label = function(x) {     recode_factor(x, `1` = "Event", `2` =
+    "Competing event", .default = "Event free") },
+  add_ci = TRUE,
+  add_atrisk = TRUE,
+  add_legend = FALSE,
+  add_pvalue = TRUE,
+  atrisk_init_pos = NULL,
+  pvalue_pos = c("bottomright", "topleft", "topright", "bottomleft", "left", "right",
+    "top", "bottom"),
+  plot_theme = theme_minimal(),
+  x_lab = "Time",
+  y_lab = "Proportion of subjects",
+  x_lim = NULL,
+  y_lim = NULL,
+  x_break = NULL,
+  y_break = NULL,
   color_scheme = c("brewer", "grey", "viridis", "manual"),
-  color_list = NULL, plot_cdf = FALSE)
+  color_list = NULL,
+  plot_cdf = FALSE
+)
 }
 \arguments{
 \item{surv_obj}{a survfitms subject.}

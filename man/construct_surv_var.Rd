@@ -4,8 +4,15 @@
 \alias{construct_surv_var}
 \title{construct_surv_var}
 \usage{
-construct_surv_var(df, patid, idx_dt, evt_dt, end_dt,
-  surv_varname = NULL, append = FALSE)
+construct_surv_var(
+  df,
+  patid,
+  idx_dt,
+  evt_dt,
+  end_dt,
+  surv_varname = NULL,
+  append = FALSE
+)
 }
 \arguments{
 \item{df}{input data}

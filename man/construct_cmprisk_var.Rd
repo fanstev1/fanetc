@@ -4,8 +4,16 @@
 \alias{construct_cmprisk_var}
 \title{construct_cmprisk_var}
 \usage{
-construct_cmprisk_var(df, patid, idx_dt, evt_dt, end_dt,
-  cmprisk_varname = NULL, append = FALSE, ...)
+construct_cmprisk_var(
+  df,
+  patid,
+  idx_dt,
+  evt_dt,
+  end_dt,
+  cmprisk_varname = NULL,
+  append = FALSE,
+  ...
+)
 }
 \description{
 construct_cmprisk_var

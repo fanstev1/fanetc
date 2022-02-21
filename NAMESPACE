@@ -2,8 +2,10 @@
 
 export(admin_censor_cmprisk)
 export(admin_censor_surv)
+export(calculate_type3_mi)
 export(construct_cmprisk_var)
 export(construct_surv_var)
+export(decimalplaces)
 export(estimate_cif)
 export(estimate_km)
 export(extract_atrisk)

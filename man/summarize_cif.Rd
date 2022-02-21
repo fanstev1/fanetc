@@ -10,5 +10,5 @@ summarize_cif(fit, times = NULL)
 summarize_cif
 }
 \details{
-The function summarize the fitted CIF at the time points specified by a user.
+The function summarizes the fitted CIF at the time points specified by a user.
 }

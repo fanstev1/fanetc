@@ -4,8 +4,13 @@
 \alias{admin_censor_surv}
 \title{admin_censor_surv}
 \usage{
-admin_censor_surv(df, evt_time, evt, adm_cnr_time = NULL,
-  overwrite_var = FALSE)
+admin_censor_surv(
+  df,
+  evt_time,
+  evt,
+  adm_cnr_time = NULL,
+  overwrite_var = FALSE
+)
 }
 \arguments{
 \item{df}{input data}

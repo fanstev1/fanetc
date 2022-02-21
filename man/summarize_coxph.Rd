@@ -4,12 +4,11 @@
 \alias{summarize_coxph}
 \title{summarize_coxph}
 \usage{
-summarize_coxph(mdl, exponentiate = TRUE, maxlabel = 100,
-  alpha = 0.05)
+summarize_coxph(mdl, exponentiate = TRUE, maxlabel = 100, alpha = 0.05)
 }
 \description{
 summarize_coxph
 }
 \details{
-The function summarize the fitted cox model and calculate the type 3 error.
+The function summarizes the fitted cox model with the type 3 error based on Wald's statistics.
 }

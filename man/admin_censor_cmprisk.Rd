@@ -4,15 +4,21 @@
 \alias{admin_censor_cmprisk}
 \title{admin_censor_cmprisk}
 \usage{
-admin_censor_cmprisk(df, evt_time, evt, adm_cnr_time = NULL,
-  evt_label = NULL, overwrite_var = FALSE)
+admin_censor_cmprisk(
+  df,
+  evt_time,
+  evt,
+  adm_cnr_time = NULL,
+  evt_label = NULL,
+  overwrite_var = FALSE
+)
 }
 \arguments{
 \item{df}{input data}
 
 \item{evt_time}{a numeric vector recording the time points at which the event occurs.}
 
-\item{evt}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
+\item{evt}{a factor vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
 
 \item{adm_cnr_time}{a numeric vector specifying the time point at which administrative censoring is applied.}
 
