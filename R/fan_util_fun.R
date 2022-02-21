@@ -902,7 +902,7 @@ generate_mi_glm_termplot_df<- function(mira_obj,
   require(mitools)
   dummy_mdl<- getfit(mira_obj, 1L)
   tt<- stats::terms(dummy_mdl)
-  terms<- if (is.null(terms)) length(labels(tt)) else terms
+  terms<- if (is.null(terms)) 1:length(labels(tt)) else terms
   cn<- attr(tt, "term.labels")[terms]
   varseq<- attr(mm_orig<- model.matrix(dummy_mdl), "assign")
 
