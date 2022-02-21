@@ -59,7 +59,7 @@ extract_atrisk<- function(fit, time.list, time.scale= 1) {
 
 
 
-
+#' @export
 prepare_survfit<- function(surv_obj) {
 
   prepare_cmprisk<- function(surv_obj) {
@@ -175,7 +175,7 @@ prepare_survfit<- function(surv_obj) {
   return(out)
 }
 
-
+#' @export
 add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
   #---- get parameters required for where to include the at-risk table ----#
@@ -327,60 +327,7 @@ run_logrank_test<- function(surv_obj) {
   pval
 }
 
-#' @title show_surv
-#'
-#' @details
-#' The function shows the survival function with and without strata.
-#'
-#' @param surv_obj a numeric vector recording the time points at which the event occurs.
-#' @param x_lab an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
-#' @param y_lab a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param x_lim a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param y_lim a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param color_list a list containing the parameter values for scale_color_manual() or scale_fill_manual()
-#' @param plot_theme a user-specify ggplot theme.
-#' @param add_ci  logical parameter indicating whether a pointwise 95% confidence interval should be added.
-#' @param add_atrisk a logical parameter indicating whether at-risk table should be added to the figure.
-#' @param add_legend a logical parameter indicating whether legend should be added to the figure.
-#' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
-#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
-#' @param plot_cdf a logical scalar (default= FALSE) indiciates if the CDF (instead of) survival function should be plotted.
-#' @return A ggplot object.
-#' @examples
-#' my_plot_theme<- theme_bw() +
-#' theme(axis.title  = element_text(size= 14, family="Arial"),
-#'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
-#'       axis.title.y= element_text(margin= unit(c(t= 0, r = 1, b = 0, l = 0), "lines"), family="Arial"),
-#'       axis.text   = element_text(size= 12, family="Arial"),
-#'       # set the axis line (i.e. bty= "l" in traditional plot)
-#'       axis.line.x = element_line(color="black", size = 1),
-#'       axis.line.y = element_line(color="black", size = 1),
-#'
-#'       # specify the legend (e.g. position, color, justification)
-#'       legend.title= element_blank(),
-#'       legend.background= element_rect(fill= "transparent"),
-#'       legend.text      = element_text(family= "Arial", size = 12),
-#'       legend.margin    = margin(t = 0, r = 0, b = 0, l = 0,"bigpts"),
-#'       legend.key       = element_rect(fill= "transparent", color= "transparent", linetype= "blank"),
-#'       legend.key.size  = unit(24, "bigpts"),
-#'       # legend.position= c(0.98, 0.02),
-#'       # legend.justification= c(1, 0),
-#'
-#'       #eliminates background, gridlines, and chart border
-#'       panel.border = element_blank(),
-#'       # plot.background = element_blank(),
-#'       # panel.grid.major = element_blank(),
-#'       panel.grid.minor = element_blank(),
-#'       panel.spacing = unit(1, "lines"),
-#'
-#'       strip.background = element_rect(fill = "black", color= "white"),
-#'       strip.text = element_text(family = "Arial", color= "white", size = 12, face= "bold"),
-#'
-#'       # plot margin. Sufficient margins must be specified for printing at-risk patients.
-#'       plot.margin= unit(c(top= 0.1, right= 0.05, bottom= .3, left= .2), "npc"))
-#'
-#' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
-#' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+
 #' @export
 show_surv<- function(surv_obj,
                      x_lab= 'Time',
@@ -611,7 +558,7 @@ estimate_cif<- function(df, evt_time, evt, group, ...) {
 }
 
 
-
+#' @export
 run_gray_test<- function(surv_obj, evt_type= 1:2) {
 
   df<- as.list(eval(surv_obj$call$data, parent.frame()))
