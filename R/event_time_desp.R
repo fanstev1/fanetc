@@ -169,8 +169,8 @@ prepare_survfit<- function(surv_obj) {
                             df %$%
                               tibble(time     = time[xs],
                                      conf_low = conf_low[ys],
-                                     conf_high= conf_high[ys]) %>%
-                              filter(!(is.na(conf_low) & is.na(conf_high)))
+                                     conf_high= conf_high[ys]) #%>%
+                              # filter(!(is.na(conf_low) & is.na(conf_high)))
                           }))
   return(out)
 }
@@ -800,43 +800,59 @@ show_cif<- function(surv_obj,
 
     pvalue_pos<- match.arg(pvalue_pos)
     if (pvalue_pos %in% c("topleft")) {
-      pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      # pvalue.x<- layer_scales(out)$x$range$range[1]
+      # pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.x<- 0
+      pvalue.y<- 1
       pvalue.hjust<- 0
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomleft")) {
-      pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      # pvalue.x<- layer_scales(out)$x$range$range[1]
+      # pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.x<- 0
+      pvalue.y<- 0
       pvalue.hjust<- 0
       pvalue.vjust<- 0
-    } else if (pvalue_pos %in% c("left")) {
-      pvalue.x<- layer_scales(out)$x$range$range[1]
-      pvalue.y<- mean(layer_scales(out)$y$range$range)
-      pvalue.hjust<- 0
-      pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("topright")) {
-      pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      # pvalue.x<- layer_scales(out)$x$range$range[2]
+      # pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.x<- 1
+      pvalue.y<- 1
       pvalue.hjust<- 1
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomright")) {
-      pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      # pvalue.x<- layer_scales(out)$x$range$range[2]
+      # pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.x<- 1
+      pvalue.y<- 0
       pvalue.hjust<- 1
       pvalue.vjust<- 0
+    } else if (pvalue_pos %in% c("left")) {
+      # pvalue.x<- layer_scales(out)$x$range$range[1]
+      # pvalue.y<- mean(layer_scales(out)$y$range$range)
+      pvalue.x<- 0
+      pvalue.y<- 0.5
+      pvalue.hjust<- 0
+      pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("right")) {
-      pvalue.x<- layer_scales(out)$x$range$range[2]
-      pvalue.y<- mean(layer_scales(out)$y$range$range)
+      # pvalue.x<- layer_scales(out)$x$range$range[2]
+      # pvalue.y<- mean(layer_scales(out)$y$range$range)
+      pvalue.x<- 1
+      pvalue.y<- 0.5
       pvalue.hjust<- 1
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("top")) {
-      pvalue.x<- mean(layer_scales(out)$x$range$range)
-      pvalue.y<- layer_scales(out)$y$range$range[2]
+      # pvalue.x<- mean(layer_scales(out)$x$range$range)
+      # pvalue.y<- layer_scales(out)$y$range$range[2]
+      pvalue.x<- 0.5
+      pvalue.y<- 1
       pvalue.hjust<- 0.5
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottom")) {
-      pvalue.x<- mean(layer_scales(out)$x$range$range)
-      pvalue.y<- layer_scales(out)$y$range$range[1]
+      # pvalue.x<- mean(layer_scales(out)$x$range$range)
+      # pvalue.y<- layer_scales(out)$y$range$range[1]
+      pvalue.x<- 0.5
+      pvalue.y<- 0
       pvalue.hjust<- 0.5
       pvalue.vjust<- 0
     } else {
@@ -849,15 +865,20 @@ show_cif<- function(surv_obj,
     out<- out +
       annotation_custom(
         grob = textGrob(label= pval,
-                        vjust= pvalue.vjust, hjust = pvalue.hjust,
+                        x = pvalue.x,
+                        hjust = pvalue.hjust,
+
+                        y = pvalue.y,
+                        vjust= pvalue.vjust,
+
                         gp   = gpar(family  = "Consola",
                                     # fontface="bold.italic",
                                     fontface="italic",
-                                    cex   = 1)),
-        ymin = pvalue.y,      # Vertical position of the textGrob
-        ymax = pvalue.y,
-        xmin = pvalue.x,
-        xmax = pvalue.x)
+                                    cex   = 1)))
+        # ymin = pvalue.y,      # Vertical position of the textGrob
+        # ymax = pvalue.y,
+        # xmin = pvalue.x,
+        # xmax = pvalue.x)
   }
 
   if (add_atrisk) out<- add_atrisk(out,
