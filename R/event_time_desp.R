@@ -176,7 +176,7 @@ prepare_survfit<- function(surv_obj) {
 }
 
 #' @export
-add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
+add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_theme = NULL) {
 
 
   #---- get parameters required for where to include the at-risk table ----#
@@ -197,9 +197,15 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
 
   # ---- get font information ----
-  font_family<- if (is.null(plot_theme$text$family) | trimws(plot_theme$text$family) == "") "Arial" else plot_theme$text$family
-  font_face  <- if (is.null(plot_theme$text$face) | trimws(plot_theme$text$face) == "") "plain" else plot_theme$text$face
-  font_size  <- if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size
+  if (is.null(plot_theme)) {
+    font_family<- "Arial"
+    font_face  <- "plain"
+    font_size  <- 11
+  } else {
+    font_family<- if (is.null(plot_theme$text$family) | trimws(plot_theme$text$family) == "") "Arial" else plot_theme$text$family
+    font_face  <- if (is.null(plot_theme$text$face) | trimws(plot_theme$text$face) == "") "plain" else plot_theme$text$face
+    font_size  <- if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size
+  }
 
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
   nstrata <- ncol(risk_tbl)-1
@@ -544,7 +550,11 @@ show_surv<- function(surv_obj,
     # xmax = pvalue.x)
   }
 
-  if (add_atrisk) out<- add_atrisk(out, surv_obj = surv_obj, x_break = x_break, atrisk_init_pos= atrisk_init_pos)
+  if (add_atrisk) out<- add_atrisk(out,
+                                   surv_obj = surv_obj,
+                                   x_break = x_break,
+                                   atrisk_init_pos= atrisk_init_pos,
+                                   plot_theme = plot_theme)
 
   out<- out + plot_theme
 
@@ -913,7 +923,8 @@ show_cif<- function(surv_obj,
   if (add_atrisk) out<- add_atrisk(out,
                                    surv_obj = surv_obj,
                                    x_break = x_break,
-                                   atrisk_init_pos= atrisk_init_pos)
+                                   atrisk_init_pos= atrisk_init_pos,
+                                   plot_theme = plot_theme)
 
   out<- out + plot_theme
 
