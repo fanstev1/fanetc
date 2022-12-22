@@ -178,6 +178,7 @@ prepare_survfit<- function(surv_obj) {
 #' @export
 add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
+
   #---- get parameters required for where to include the at-risk table ----#
   # atrisk_y_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
   #                            diff(p$coordinates$limits$y))
@@ -194,6 +195,12 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
 
   x_break<- if (any(is.na(x_break))) x_break[!is.na(x_break)] else x_break
 
+
+  # ---- get font information ----
+  font_family<- if (is.null(plot_theme$text$family) | trimws(plot_theme$text$family) == "") "Arial" else plot_theme$text$family
+  font_face  <- if (is.null(plot_theme$text$face) | trimws(plot_theme$text$face) == "") "plain" else plot_theme$text$face
+  font_size  <- if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size
+
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
   nstrata <- ncol(risk_tbl)-1
   # as_tibble(risk_tbl)
@@ -202,7 +209,9 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
   out <- p + annotation_custom(
     grob = textGrob(label= format("At-risk N:", width = 20),
                     vjust= 1, hjust = 1,
-                    gp = gpar(family="Arial", fontface="bold", cex = 1)),
+                    gp = gpar(fontfamily= font_family,
+                              fontsize  = font_size,
+                              fontface  = "bold")),
     ymin = atrisk_y_pos,      # Vertical position of the textGrob
     ymax = atrisk_y_pos,
     xmin = 0,         # Note: The grobs are positioned outside the plot area
@@ -221,9 +230,8 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
                                         big.mark = ",",
                                         flag = "#"),
                         vjust= 1, hjust = 0.5,
-                        gp = gpar(family="Arial",
-                                  # fontface="bold",
-                                  cex = 1)),
+                        gp = gpar(fontfamily= font_family,
+                                  fontsize  = font_size)),
         ymin = atrisk_y_pos,      # Vertical position of the textGrob
         ymax = atrisk_y_pos,
         xmin = risk_tbl$time[i],         # Note: The grobs are positioned outside the plot area
@@ -251,10 +259,10 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
         grob = textGrob(label = format(paste0(colnames(risk_tbl)[j], ":"),
                                        width = nchar(colnames(risk_tbl)[j])+ (20 - nchar("At-risk N:") + 1)),
                         vjust= 1, hjust = 1,
-                        gp = gpar(family= "Arial",
+                        gp = gpar(fontfamily= font_family,
+                                  fontsize  = font_size,
                                   col   = strata_col[j-1],
-                                  lty   = strata_lty[j-1],
-                                  cex   = 1)),
+                                  lty   = strata_lty[j-1])),
         ymin = tmp_y,      # Vertical position of the textGrob
         ymax = tmp_y,
         xmin = 0,         # Note: The grobs are positioned outside the plot area
@@ -270,10 +278,10 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL) {
                                           big.mark = ",",
                                           flag = "#"),
                           vjust= 1, hjust = 0.5,
-                          gp = gpar(family= "Arial",
+                          gp = gpar(fontfamily= font_family,
+                                    fontsize  = font_size,
                                     col   = strata_col[j-1],
-                                    lty   = strata_lty[j-1],
-                                    cex   = 1)),
+                                    lty   = strata_lty[j-1])),
           ymin = tmp_y,      # Vertical position of the textGrob
           ymax = tmp_y,
           xmin = tmp_x,      # Note: The grobs are positioned outside the plot area
