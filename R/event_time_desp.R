@@ -150,11 +150,24 @@ prepare_survfit<- function(surv_obj) {
                        }),
              plot_prob_d= map(data,
                               function(df) {
+                                df<- df %>%
+                                  dplyr::select(one_of("time", "prob"))
+
+                                df<- if (is.na(match(0, df$time))) {
+                                  # if time 0 is not included in the estimate
+                                  # time-prob (i.e., no events occur at time 0),
+                                  # then add time = 0 and prob = 1
+
+                                  df %>%
+                                    bind_rows(
+                                      tribble(~time, ~prob,
+                                              0, 1)
+                                    )
+                                } else df
+
                                 df %>%
-                                  dplyr::select(one_of("time", "prob")) %>%
-                                  bind_rows(tribble(~time, ~prob,
-                                                    0, 1)) %>%
                                   arrange(time)
+
                               }))
   }
 
@@ -178,24 +191,6 @@ prepare_survfit<- function(surv_obj) {
 #' @export
 add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_theme = NULL) {
 
-
-  #---- get parameters required for where to include the at-risk table ----#
-  # atrisk_y_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
-  #                            diff(p$coordinates$limits$y))
-  atrisk_y_pos<- if (is.null(atrisk_init_pos)) {
-    -0.225 * max(diff(layer_scales(p)$y$range$range),
-                 diff(p$coordinates$limits$y))
-  } else atrisk_init_pos
-
-  x_break     <- if (is.null(x_break)) {
-    layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
-  } else {
-    x_break[x_break >= min(layer_scales(p)$x$range$range) & x_break<= max(layer_scales(p)$x$range$range)]
-  }
-
-  x_break<- if (any(is.na(x_break))) x_break[!is.na(x_break)] else x_break
-
-
   # ---- get font information ----
   if (is.null(plot_theme)) {
     font_family<- "Arial"
@@ -207,19 +202,41 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
     font_size  <- if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size
   }
 
+  #---- get parameters required for where to include the at-risk table ----#
+  # atrisk_init_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
+  #                            diff(p$coordinates$limits$y))
+  atrisk_init_pos<- if (is.null(atrisk_init_pos)) {
+    -0.225 * max(diff(layer_scales(p)$y$range$range),
+                 diff(p$coordinates$limits$y))
+  } else atrisk_init_pos
+
+  # I need to calculate the number of at-risk at the x_break
+  x_break     <- if (is.null(x_break)) {
+    layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
+  } else {
+    x_break[x_break >= min(layer_scales(p)$x$range$range) & x_break<= max(layer_scales(p)$x$range$range)]
+  }
+
+  x_break<- if (any(is.na(x_break))) x_break[!is.na(x_break)] else x_break
+
+
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
   nstrata <- ncol(risk_tbl)-1
   # as_tibble(risk_tbl)
 
-  # add 'At-risk' at x= 0 and y= atrisk_y_pos
+  # to include the at-risk table in the existing figure, I specified the location
+  # (x- and y-position) for the "At-risk N:" label and for each cell entry of the
+  #  at-risk table by creating separate textGrob object.
+
+  # Step 1: add a bold 'At-risk N:' label at x= 0 and y= atrisk_init_pos
   out <- p + annotation_custom(
     grob = textGrob(label= format("At-risk N:", width = 20),
                     vjust= 1, hjust = 1,
                     gp = gpar(fontfamily= font_family,
                               fontsize  = font_size,
                               fontface  = "bold")),
-    ymin = atrisk_y_pos,      # Vertical position of the textGrob
-    ymax = atrisk_y_pos,
+    ymin = atrisk_init_pos,      # Vertical position of the textGrob
+    ymax = atrisk_init_pos,
     xmin = 0,         # Note: The grobs are positioned outside the plot area
     xmax = 0)
 
@@ -238,8 +255,8 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
                         vjust= 1, hjust = 0.5,
                         gp = gpar(fontfamily= font_family,
                                   fontsize  = font_size)),
-        ymin = atrisk_y_pos,      # Vertical position of the textGrob
-        ymax = atrisk_y_pos,
+        ymin = atrisk_init_pos,      # Vertical position of the textGrob
+        ymax = atrisk_init_pos,
         xmin = risk_tbl$time[i],         # Note: The grobs are positioned outside the plot area
         xmax = risk_tbl$time[i])
     }
@@ -259,7 +276,7 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
     strata_lty<- if (length(strata_lty)==1 & length(strata_lty)< nstrata) rep(strata_lty, nstrata) else strata_lty
 
     for (j in 2:ncol(risk_tbl)) {
-      tmp_y<- atrisk_y_pos + (j-1)*atrisk_y_inc
+      tmp_y<- atrisk_init_pos + (j-1)*atrisk_y_inc
 
       out <- out + annotation_custom(
         grob = textGrob(label = format(paste0(colnames(risk_tbl)[j], ":"),
@@ -362,11 +379,13 @@ show_surv<- function(surv_obj,
                      pvalue_pos= c("topleft", "topright", "bottomleft", "bottomright", "left", "right", "top", "bottom"),
                      plot_cdf= FALSE) {
 
+  # no need to add pvalues for a single cohort
+  add_pvalue<- if (all(names(surv_obj)!='strata')) FALSE else add_pvalue
+  # no need to add legend if it is a single cohort or add risk (when it is >1 cohorts). The at-risk table will be color-coded to indicate cohort
+  add_legend<- if (all(names(surv_obj)!='strata') | add_atrisk) FALSE else add_legend
+
   color_scheme<- match.arg(color_scheme)
   if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
-
-  add_pvalue<- if (all(names(surv_obj)!='strata')) FALSE else add_pvalue
-  add_legend<- if (all(names(surv_obj)!='strata') | add_atrisk) FALSE else add_legend
 
   fill_fun <- switch(color_scheme,
                      'brewer' = quote(scale_fill_brewer(palette = "Set1")),
@@ -417,7 +436,7 @@ show_surv<- function(surv_obj,
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
                        expand= c(0.01, 0.005),
-                       labels= scales::comma)
+                       labels= function(x) scales::comma(x, accuracy = 1))
 
   if (add_ci) {
     plot_ci_d<- surv_mat %>%
@@ -436,7 +455,7 @@ show_surv<- function(surv_obj,
         filter(conf_low <= y_lim[2],
                conf_high>= y_lim[1]) %>%
         mutate(conf_high= replace(conf_high, conf_high> y_lim[2], y_lim[2]),
-               conf_low= replace(conf_low, conf_low< y_lim[1], y_lim[1]))
+               conf_low = replace(conf_low, conf_low< y_lim[1], y_lim[1]))
     }
 
     out<- out +
@@ -451,10 +470,9 @@ show_surv<- function(surv_obj,
                                  breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
                                  # expand= c(0.01, 0.005),
                                  expand= c(0.005, 0),
+                                 labels= function(x) scales::percent(x, accuracy = 1))
 
-                                 labels= scales::percent)
-
-  out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim) else out
+  out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim, clip = "on") else out
 
   if (add_pvalue) {
     pval<- run_logrank_test(surv_obj) %>%
@@ -467,46 +485,47 @@ show_surv<- function(surv_obj,
     y_top   <- max(layer_scales(out)$y$range$range[2], out$coordinates$limits$y[2], na.rm= TRUE)
     y_mid   <- (y_top + y_bottom)/2
 
+    tiny_nudge<- 0.01
     pvalue_pos<- match.arg(pvalue_pos)
     if (pvalue_pos %in% c("topleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0
-      pvalue.y<- 1
+      pvalue.x<- 0 + tiny_nudge
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0
-      pvalue.y<- 0
+      pvalue.x<- 0 + tiny_nudge
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("topright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 1
-      pvalue.y<- 1
+      pvalue.x<- 1 - tiny_nudge
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 1
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 1
-      pvalue.y<- 0
+      pvalue.x<- 1 - tiny_nudge
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 1
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("left")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 0
+      pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 0.5
       pvalue.hjust<- 0
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("right")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 1
+      pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 0.5
       pvalue.hjust<- 1
       pvalue.vjust<- 0.5
@@ -514,14 +533,14 @@ show_surv<- function(surv_obj,
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
       # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.x<- 0.5
-      pvalue.y<- 1
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0.5
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottom")) {
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0.5
-      pvalue.y<- 0
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0.5
       pvalue.vjust<- 0
     } else {
@@ -540,10 +559,11 @@ show_surv<- function(surv_obj,
                         y = pvalue.y,
                         vjust= pvalue.vjust,
 
-                        gp   = gpar(family  = "Consola",
+                        gp   = gpar(family  = "Inconsolata",
                                     # fontface="bold.italic",
-                                    fontface="italic",
-                                    cex   = 1)))
+                                    fontface = "italic",
+                                    # cex   = 1,
+                                    fontsize  = if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size)))
     # ymin = pvalue.y,      # Vertical position of the textGrob
     # ymax = pvalue.y,
     # xmin = pvalue.x,
@@ -628,6 +648,7 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @param add_legend a logical parameter indicating whether legend should be added to the figure.
 #' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
 #' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
+#' @param atrisk_init_pos the location of the label "At-risk N:"
 #' @param plot_cdf Not used
 #' @return A ggplot object.
 #' @examples
@@ -716,9 +737,6 @@ show_cif<- function(surv_obj,
 
                     plot_cdf= FALSE) {
 
-  color_scheme<- match.arg(color_scheme)
-  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
-
   #---- prepare survfit for plot ----
   cmprisk_mat<- prepare_survfit(surv_obj)
   cmprisk_mat<- cmprisk_mat %>%
@@ -732,10 +750,12 @@ show_cif<- function(surv_obj,
     dplyr::select(strata, state, state_label, state_strata, plot_prob_d) %>%
     unnest(cols = c(plot_prob_d))
 
-
   add_pvalue<- if (nlevels(plot_prob_d$strata)==1) FALSE else add_pvalue
   add_legend<- if ((nlevels(plot_prob_d$strata)==1 &
                     nlevels(plot_prob_d$state) ==1 )) FALSE else add_legend
+
+  color_scheme<- match.arg(color_scheme)
+  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
 
   fill_fun <- switch(color_scheme,
                      'brewer' = quote(scale_fill_brewer(palette = "Set1", guide_legend(title= ""))),
@@ -776,14 +796,14 @@ show_cif<- function(surv_obj,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
                        expand= c(0.01, 0.005),
                        # limits = x_lim,
-                       labels= scales::comma) +
+                       labels= function(x) scales::comma(x, accuracy = 1)) +
     scale_y_continuous(name  = y_lab,
                        breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
                        expand= c(0.01, 0),
                        # limits= y_lim,
-                       labels= scales::percent)
+                       labels= function(x) scales::percent(x, accuracy = 1))
 
-  out<- if (!is.null(x_lim) | !is.null(y_lim)) out + coord_cartesian(xlim= x_lim, ylim = y_lim) else out
+  out<- if (!is.null(x_lim) | !is.null(y_lim)) out + coord_cartesian(xlim= x_lim, ylim = y_lim, clip = "on") else out
 
   if (add_ci) {
     plot_ci_d<- cmprisk_mat %>%
@@ -910,10 +930,11 @@ show_cif<- function(surv_obj,
                         y = pvalue.y,
                         vjust= pvalue.vjust,
 
-                        gp   = gpar(family  = "Consola",
+                        gp   = gpar(family  = "Inconsolata",
                                     # fontface="bold.italic",
                                     fontface="italic",
-                                    cex   = 1)))
+                                    # cex   = 1,
+                                    fontsize  = if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size)))
         # ymin = pvalue.y,      # Vertical position of the textGrob
         # ymax = pvalue.y,
         # xmin = pvalue.x,
