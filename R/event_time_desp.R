@@ -494,28 +494,28 @@ show_surv<- function(surv_obj,
       pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("topright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 1
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 1
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("left")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
@@ -536,14 +536,14 @@ show_surv<- function(surv_obj,
       pvalue.x<- 0.5
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0.5
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottom")) {
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0.5
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0.5
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else {
       pvalue.x<- NULL
       pvalue.y<- NULL
