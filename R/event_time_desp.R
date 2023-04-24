@@ -859,61 +859,62 @@ show_cif<- function(surv_obj,
       format_pvalue()
     pval<- ifelse(trimws(pval)=="<0.001", "Gray's p< 0.001", paste0("Gray's p= ", pval) )
 
+    tiny_nudge<- 0.01
     pvalue_pos<- match.arg(pvalue_pos)
     if (pvalue_pos %in% c("topleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0
-      pvalue.y<- 1
+      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
+      pvalue.x<- 0 + tiny_nudge
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0
-      pvalue.y<- 0
+      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
+      pvalue.x<- 0 + tiny_nudge
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("topright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- layer_scales(out)$y$range$range[2]
-      pvalue.x<- 1
-      pvalue.y<- 1
+      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
+      pvalue.x<- 1 - tiny_nudge
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 1
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottomright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- layer_scales(out)$y$range$range[1]
-      pvalue.x<- 1
-      pvalue.y<- 0
+      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
+      pvalue.x<- 1 - tiny_nudge
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 1
       pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("left")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 0
+      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
+      pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 0.5
       pvalue.hjust<- 0
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("right")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 1
+      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
+      pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 0.5
       pvalue.hjust<- 1
       pvalue.vjust<- 0.5
     } else if (pvalue_pos %in% c("top")) {
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- layer_scales(out)$y$range$range[2]
+      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.x<- 0.5
-      pvalue.y<- 1
+      pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0.5
       pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("bottom")) {
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- layer_scales(out)$y$range$range[1]
+      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0.5
-      pvalue.y<- 0
+      pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0.5
       pvalue.vjust<- 0
     } else {
