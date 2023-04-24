@@ -377,7 +377,8 @@ show_surv<- function(surv_obj,
                      add_pvalue= TRUE,
                      atrisk_init_pos= NULL,
                      pvalue_pos= c("topleft", "topright", "bottomleft", "bottomright", "left", "right", "top", "bottom"),
-                     plot_cdf= FALSE) {
+                     plot_cdf= FALSE,
+                     print_fig = TRUE) {
 
   # no need to add pvalues for a single cohort
   add_pvalue<- if (all(names(surv_obj)!='strata')) FALSE else add_pvalue
@@ -493,28 +494,28 @@ show_surv<- function(surv_obj,
       pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("bottomleft")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0 + tiny_nudge
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("topright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
       pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 1
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("bottomright")) {
       # pvalue.x<- layer_scales(out)$x$range$range[2]
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 1 - tiny_nudge
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 1
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else if (pvalue_pos %in% c("left")) {
       # pvalue.x<- layer_scales(out)$x$range$range[1]
       # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
@@ -535,14 +536,14 @@ show_surv<- function(surv_obj,
       pvalue.x<- 0.5
       pvalue.y<- 1 - tiny_nudge
       pvalue.hjust<- 0.5
-      pvalue.vjust<- 1
+      pvalue.vjust<- 0
     } else if (pvalue_pos %in% c("bottom")) {
       # pvalue.x<- mean(layer_scales(out)$x$range$range)
       # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
       pvalue.x<- 0.5
       pvalue.y<- 0 + tiny_nudge
       pvalue.hjust<- 0.5
-      pvalue.vjust<- 0
+      pvalue.vjust<- 1
     } else {
       pvalue.x<- NULL
       pvalue.y<- NULL
@@ -578,7 +579,7 @@ show_surv<- function(surv_obj,
 
   out<- out + plot_theme
 
-  print(out)
+  if (print_fig) print(out)
   # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
   return(out)
 }
@@ -735,7 +736,8 @@ show_cif<- function(surv_obj,
                     color_scheme= c("brewer", "grey", "viridis", "manual"),
                     color_list= NULL, #required only if color_scheme= 'manual'. eg color_list= list(values= c('red', 'blue'))
 
-                    plot_cdf= FALSE) {
+                    plot_cdf= FALSE,
+                    print_fig = TRUE) {
 
   #---- prepare survfit for plot ----
   cmprisk_mat<- prepare_survfit(surv_obj)
@@ -949,8 +951,8 @@ show_cif<- function(surv_obj,
 
   out<- out + plot_theme
 
-  print(out)
-  out
+  if (print_fig) print(out)
+  return(out)
 }
 
 
