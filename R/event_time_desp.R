@@ -450,13 +450,13 @@ show_surv<- function(surv_obj,
                conf_low = conf_high)
     }
 
-    if (y_lim[2]< 1) {
-      plot_ci_d<- plot_ci_d %>%
-        filter(conf_low <= y_lim[2],
-               conf_high>= y_lim[1]) %>%
-        mutate(conf_high= replace(conf_high, conf_high> y_lim[2], y_lim[2]),
-               conf_low = replace(conf_low, conf_low< y_lim[1], y_lim[1]))
-    }
+    # if (y_lim[2]< 1) {
+    #   plot_ci_d<- plot_ci_d %>%
+    #     filter(conf_low <= y_lim[2],
+    #            conf_high>= y_lim[1]) %>%
+    #     mutate(conf_high= replace(conf_high, conf_high> y_lim[2], y_lim[2]),
+    #            conf_low = replace(conf_low, conf_low< y_lim[1], y_lim[1]))
+    # }
 
     out<- out +
       geom_ribbon(data= plot_ci_d,
