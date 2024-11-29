@@ -53,6 +53,9 @@ extract_atrisk<- function(fit, time.list, time.scale= 1) {
     atRiskPts<- atRisk(time.list)
     atRiskPts<- data.frame(time= time.list, Overall= as.integer(atRiskPts))
   }
+
+  atRiskPts<- if (any(names(fit)=="start.time")) filter(atRiskPts, time >= fit$start.time) else atRiskPts
+
   return(atRiskPts)
 }
 
