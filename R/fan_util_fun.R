@@ -232,7 +232,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   names(cmp_evt_dt)<- sapply(cmp_evt_dt, lazyeval::as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
 
   cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
-  evt_desc<- c('evt', cmp_evt_desc, 'censored')
+  evt_desc<- c('evt_1', cmp_evt_desc, 'censored_0')
 
   tmp_df<- df %>%
     dplyr::select(!!patid, !!idx_dt, !!evt_dt, !!!cmp_evt_dt, !!end_dt) %>%
@@ -246,11 +246,16 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
              is.infinite(first_evt_dt) | is.na(first_evt_dt) ~ NA_real_,
              TRUE ~ as.numeric(first_evt_dt - !!idx_dt)),
 
+           # Steve: this is the part of the code that generates warning messages.
+           # evt= case_when(
+           #   is.na(time2evt) ~ NA_integer_,
+           #   first_evt=='censored' ~ 0L,
+           #   first_evt=='evt' ~ 1L,
+           #   TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
+
            evt= case_when(
              is.na(time2evt) ~ NA_integer_,
-             first_evt=='censored' ~ 0L,
-             first_evt=='evt' ~ 1L,
-             TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
+             TRUE ~ as.integer(gsub('^(cmp_evt|evt|censored)_', '', first_evt))),
     ) %>%
     ungroup()
 
@@ -258,7 +263,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   # in the situtation in which no pts are censored, no observations have a value of zero.
   # need to convert evt to a factor forcing 0 as the first level of the factor.
   tmp_df<- tmp_df %>%
-    mutate(evt= factor(evt, 0:max(evt, na.rm= TRUE), labels = 0:max(evt, na.rm= TRUE)))
+    mutate(evt= factor(evt, 0:(n_cmp_evt + 1), labels = 0:(n_cmp_evt + 1)))
 
 
   flag<- FALSE
@@ -283,14 +288,16 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
 
   tmp_df<- if (is.null(cmprisk_varname)) {
     tmp_df %>%
+      select(!!patid, time2evt, evt) %>%
       rename(evt_time= time2evt)
   } else {
     tmp_df %>%
+      select(!!patid, time2evt, evt) %>%
       rename(!!cmprisk_varname[1]:= time2evt,
              !!cmprisk_varname[2]:= evt)
   }
 
-  tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
+  # tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
 
   if (!append) tmp_df else {
     df %>%
