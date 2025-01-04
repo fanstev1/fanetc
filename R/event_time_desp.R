@@ -604,13 +604,25 @@ estimate_cif<- function(df, evt_time, evt, group, ...) {
   evt     <- enquo(evt)
   group   <- enquo(group)
 
+  # out<- if (quo_is_missing(group)) {
+  #   substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ 1, data= df, ...),
+  #              list(evt_time= quo_get_expr(evt_time),
+  #                   evt     = quo_get_expr(evt),
+  #                   df      = df))
+  # } else {
+  #   substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ grp, data= df, ...),
+  #              list(evt_time= quo_get_expr(evt_time),
+  #                   evt     = quo_get_expr(evt),
+  #                   grp     = quo_get_expr(group),
+  #                   df      = df))
+  # }
   out<- if (quo_is_missing(group)) {
-    substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ 1, data= df, ...),
+    substitute(survfit(Surv(evt_time, evt) ~ 1, data= df, ...),
                list(evt_time= quo_get_expr(evt_time),
                     evt     = quo_get_expr(evt),
                     df      = df))
   } else {
-    substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ grp, data= df, ...),
+    substitute(survfit(Surv(evt_time, evt) ~ grp, data= df, ...),
                list(evt_time= quo_get_expr(evt_time),
                     evt     = quo_get_expr(evt),
                     grp     = quo_get_expr(group),
