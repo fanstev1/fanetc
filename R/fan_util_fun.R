@@ -607,11 +607,15 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
     # out<- cbind(variable= attr(mdl$terms, "term.labels"), out)
 
     term_excld<- attr(mdl$terms, "response")
-    term_excld<- if (!is.null(attr(mdl$terms, "specials"))) c(term_excld, unlist(attr(mdl$terms, "specials")[c("strata", "cluster")]))
+    term_excld<- if (!is.null(attr(mdl$terms, "specials"))) c(term_excld, unlist(attr(mdl$terms, "specials")))
+    # term_excld<- if (!is.null(attr(mdl$terms, "specials"))) c(term_excld, unlist(attr(mdl$terms, "specials")[c("strata", "cluster")]))
     # out<- cbind(variable= names(attr(mdl$terms, "dataClasses"))[-term_excld],
     #             out, stringsAsFactors= FALSE)
-    out<- cbind(variable= attr(mdl$terms, "term.labels"),
-                out, stringsAsFactors= FALSE)
+    var_label<- attr(mdl$terms, "term.labels")[
+      match(names(attr(mdl$terms, "dataClasses"))[-term_excld],
+                      attr(mdl$terms, "term.labels"))
+      ]
+    out<- cbind(variable= var_label, out, stringsAsFactors= FALSE)
     out
   }
 
