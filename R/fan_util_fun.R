@@ -615,7 +615,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
     #   match(names(attr(mdl$terms, "dataClasses"))[-term_excld],
     #                   attr(mdl$terms, "term.labels"))
     #   ]
-    var_label<- grep("\\(.*\\)", attr(mdl$terms, "term.labels"), value = T, invert = T)
+    var_label<- grep("(strata|cluster|tt|ridge|pspline|frailty)\\(.*\\)", attr(mdl$terms, "term.labels"), value = T, invert = T)
     out<- cbind(variable= var_label, out, stringsAsFactors= FALSE)
     out
   }
