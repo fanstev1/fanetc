@@ -7,55 +7,73 @@
 #' @param time.list a numeric vector specifying the time points at which the number of at-risk subjects is calculated.
 #' @return A dataframe containing the number of at risk patients at time-, overall or by strata
 #' @export
-extract_atrisk<- function(fit, time.list, time.scale= 1) {
+extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
+  if (is.null(time.list)) {
+    time.list <- c(fit$t0, max(fit$time / time.scale))
+    time.list <- pretty(time.list)
+  }
+  time.list <- sort(c(fit$t0, time.list[time.list > fit$t0 & time.list <= max(fit$time / time.scale)]))
 
-  if (any(names(fit)=="strata")){
-    strata_lab<- sapply(strsplit(names(fit$strata), "="), function(x) x[2])
+  if (any(names(fit) == "strata")) {
+    strata_lab <- sapply(strsplit(names(fit$strata), "="), function(x) x[2])
 
-    x<- data.frame(time = fit$time/time.scale,
-                   n.risk= if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
-                   strata = factor(unlist(mapply(rep, x = seq_along(fit$strata), each = fit$strata, SIMPLIFY = FALSE)),
-                                   seq_along(fit$strata),
-                                   labels = strata_lab))
-
-    # at risk process is right-continuous
-    # Steve note: have to fix the following line `rule` for data with delayed entries.
-    # approxfun(x= time, y= n.risk, method= "constant", rule = 1:1, f= 1)
-    atRisk<- lapply(split(x, x$strata),
-                    function(x) with(x,
-                                     approxfun(x= time, y= n.risk, method= "constant", rule = 2:1, f= 1)
-                    )
+    x <- data.frame(
+      time = fit$time / time.scale,
+      n.risk = if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
+      strata = factor(
+        unlist(
+          mapply(rep, x = seq_along(fit$strata), each = fit$strata, SIMPLIFY = FALSE)
+        ),
+        seq_along(fit$strata),
+        labels = strata_lab
+      )
     )
 
-    atRiskPts<- rapply(atRisk,
-                       function(x) {
-                         out<- x(time.list)
-                         replace(out, is.na(out), 0)
-                       },
-                       how = "unlist")
-    atRiskPts<-  matrix(atRiskPts, nrow= length(time.list), byrow= FALSE)
-    rownames(atRiskPts)<- time.list
-    colnames(atRiskPts)<- strata_lab
-    atRiskPts<- as.data.frame(atRiskPts) %>%
-      mutate_all(as.integer) %>%
-      # rownames_to_column("time") %>%
-      mutate(time= time.list) %>%
-      dplyr::select(time, everything())
-  }
-  else {
-    x<- data.frame(time = fit$time/time.scale,
-                   n.risk=  if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
-                   strata= factor(1, 1, labels = "Overall"))
-
+    # create a list of right continuous piecewise contant function for the at risk process in each strata
     # Steve note: have to fix the following line `rule` for data with delayed entries.
     # approxfun(x= time, y= n.risk, method= "constant", rule = 1:1, f= 1)
-    atRisk<- with(x, approxfun(x= time, y= n.risk, method= "constant", rule = 2:1, f= 1))
-    atRiskPts<- atRisk(time.list)
-    atRiskPts<- data.frame(time= time.list, Overall= as.integer(atRiskPts))
+    atRisk <- lapply(
+      split(x, x$strata),
+      function(df) {
+        with(
+          df,
+          approxfun(x = time, y = n.risk, method = "constant", rule = 2:1, f = 1)
+        )
+      }
+    )
+
+    atRiskPts <- rapply(atRisk,
+      function(ff) {
+        out <- ff(time.list)
+        replace(out, is.na(out), 0)
+      },
+      how = "unlist"
+    ) %>%
+      matrix(
+        nrow = length(time.list), byrow = FALSE,
+        dimnames = list(time.list, strata_lab)
+      )
+
+    atRiskPts <- atRiskPts %>%
+      dplyr::as_tibble() %>%
+      dplyr::mutate_all(~ as.integer(replace(., is.na(.), 0))) %>%
+      dplyr::mutate(time = time.list) %>%
+      tidyr::pivot_longer(cols = !time, names_to = "strata", cols_vary = "slowest")
+  } else {
+    # no strata - single group
+    x <- data.frame(
+      time = fit$time / time.scale,
+      n.risk = if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
+      strata = factor(1, 1, labels = "Overall")
+    )
+
+    atRisk <- with(x, approxfun(x = time, y = n.risk, method = "constant", rule = 2:1, f = 1))
+    atRiskPts <- atRisk(time.list)
+    atRiskPts <- dplyr::tibble(
+      time = time.list,
+      Overall = as.integer(replace(atRiskPts, is.na(atRiskPts), 0))
+    )
   }
-
-  atRiskPts<- if (any(names(fit)=="start.time")) filter(atRiskPts, time >= fit$start.time) else atRiskPts
-
   return(atRiskPts)
 }
 
@@ -63,131 +81,142 @@ extract_atrisk<- function(fit, time.list, time.scale= 1) {
 
 
 #' @export
-prepare_survfit<- function(surv_obj) {
-
-  prepare_cmprisk<- function(surv_obj) {
-
+prepare_survfit <- function(surv_obj) {
+  prepare_cmprisk <- function(surv_obj) {
     # set up strata
+    nstrat <- if (is.null(surv_obj$strata)) 1 else length(surv_obj$strata)
     if (is.null(surv_obj$strata)) {
-      nstrat<- 1
       stemp <- rep(1, length(surv_obj$time) * length(surv_obj$states)) # same length as stime
       stemp <- factor(stemp, 1, labels = c("Overall"))
-    }
-    else {
-      nstrat<- length(surv_obj$strata)
-      strata_lab<- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
+    } else {
+      strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
       stemp <- rep(rep(1:nstrat, surv_obj$strata), length(surv_obj$states)) # same length as stime
       stemp <- factor(stemp, 1:nstrat, strata_lab)
     }
 
-    out<- tibble(strata   = stemp,
-                 # state    = rep(surv_obj$state, each= length(surv_obj$time)),
-                 state    = rep(replace(surv_obj$state, nchar(surv_obj$state)==0 | grepl("0", surv_obj$state), "0"),
-                                each= length(surv_obj$time)),
-                 time     = rep(surv_obj$time, length(surv_obj$state)),
-                 prob     = as.numeric(surv_obj$pstate),
-                 conf_low = as.numeric(surv_obj$lower),
-                 conf_high= as.numeric(surv_obj$upper))
-    if (class(out$strata)!= 'factor') out$strata<- factor(out$strata)
-    if (class(out$state) != 'factor') out$state <- relevel(factor(out$state), ref= '0')
+    out <- dplyr::tibble(
+      strata = stemp,
+      # state    = rep(surv_obj$state, each= length(surv_obj$time)),
+      state = rep(
+        replace(surv_obj$state, nchar(surv_obj$state) == 0 | grepl("0", surv_obj$state), "0"),
+        each = length(surv_obj$time)
+      ),
+      time = rep(surv_obj$time, length(surv_obj$state)),
+      prob = as.numeric(surv_obj$pstate),
+      conf_low = as.numeric(surv_obj$lower),
+      conf_high = as.numeric(surv_obj$upper)
+    )
+    # if (class(out$strata) != "factor") out$strata <- factor(out$strata)
+    if (class(out$state) != "factor") out$state <- relevel(factor(out$state), ref = "0")
     out
   }
 
-  prepare_surv<- function(surv_obj) {
-
+  prepare_surv <- function(surv_obj) {
     # set up strata
+    nstrat <- if (is.null(surv_obj$strata)) 1 else length(surv_obj$strata)
     if (is.null(surv_obj$strata)) {
-      nstrat <- 1
       # stemp <- rep(1, length(surv_obj$time)) # same length as stime
       stemp <- factor(rep(1, length(surv_obj$time)), 1, labels = c("Overall"))
-    }
-    else {
-      nstrat <- length(surv_obj$strata)
-      strata_lab<- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
+    } else {
+      strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
       # stemp <- rep(1:nstrat, surv_obj$strata) # same length as stime
       stemp <- factor(rep(1:nstrat, surv_obj$strata), 1:nstrat, strata_lab)
     }
 
-    tibble(strata   = stemp,
-           time     = surv_obj$time,
-           prob     = surv_obj$surv,
-           conf_low = surv_obj$lower,
-           conf_high= surv_obj$upper,
-
-           n_risk   = surv_obj$n.risk, # immediately before time t
-           n_event  = surv_obj$n.event,
-           n_censor = surv_obj$n.censor)
+    dplyr::tibble(
+      strata = stemp,
+      time = surv_obj$time,
+      prob = surv_obj$surv,
+      conf_low = surv_obj$lower,
+      conf_high = surv_obj$upper,
+      n_risk = surv_obj$n.risk, # immediately before time t
+      n_event = surv_obj$n.event,
+      n_censor = surv_obj$n.censor
+    )
   }
 
-
-
-
-
-  out<- if (any(class(surv_obj)=="survfitms")) {
-
+  out <- if (any(class(surv_obj) == "survfitms")) {
     surv_obj %>%
       prepare_cmprisk() %>%
-      group_by(strata, state) %>%
-      nest() %>%
-      mutate(plot_prob_d= map2(state, data,
-                               function(state, df) {
-                                 df<- df %>%
-                                   dplyr::select(one_of("time", "prob")) %>%
-                                   bind_rows(tribble(~time, ~prob,
-                                                     0, as.numeric(state=="0")))
-
-                                 df %>%
-                                   arrange(time, if (state!="0") prob else desc(prob))
-                               }))
+      # dplyr::group_by(strata, state) %>%
+      tidyr::nest(.by = c(strata, state)) %>%
+      dplyr::mutate(
+        plot_prob_d = purrr::map2(
+          state, data,
+          function(state, df) {
+            df %>%
+              dplyr::select(one_of("time", "prob")) %>%
+              dplyr::bind_rows(
+                dplyr::tribble(
+                  ~time, ~prob,
+                  0, as.numeric(state == "0")
+                )
+              ) %>%
+              dplyr::arrange(time, if (state != "0") prob else desc(prob))
+          }
+        )
+      )
   } else {
-
     surv_obj %>%
       prepare_surv() %>%
-      group_by(strata) %>%
-      nest() %>%
-      mutate(data= map(data,
-                       function(df) {
-                         remove<- duplicated(df$prob)
-                         if (remove[length(remove)]) remove[length(remove)]<- FALSE
-                         df[!remove,]
-                       }),
-             plot_prob_d= map(data,
-                              function(df) {
-                                df<- df %>%
-                                  dplyr::select(one_of("time", "prob"))
+      # dplyr::group_by(strata) %>%
+      tidyr::nest(.by = strata) %>%
+      dplyr::mutate(
+        data = purrr::map(
+          data,
+          function(df) {
+            remove <- duplicated(df$prob)
+            if (remove[length(remove)]) remove[length(remove)] <- FALSE
+            df[!remove, ]
+          }
+        ),
+        plot_prob_d = purrr::map(
+          data,
+          function(df) {
+            df <- df %>%
+              dplyr::select(one_of("time", "prob"))
 
-                                df<- if (is.na(match(0, df$time))) {
-                                  # if time 0 is not included in the estimate
-                                  # time-prob (i.e., no events occur at time 0),
-                                  # then add time = 0 and prob = 1
+            df <- if (is.na(match(0, df$time))) {
+              # if time 0 is not included in the estimate
+              # time-prob (i.e., no events occur at time 0),
+              # then add time = 0 and prob = 1
+              df %>%
+                dplyr::bind_rows(
+                  dplyr::tribble(
+                    ~time, ~prob,
+                    0, 1
+                  )
+                )
+            } else {
+              df
+            }
 
-                                  df %>%
-                                    bind_rows(
-                                      tribble(~time, ~prob,
-                                              0, 1)
-                                    )
-                                } else df
-
-                                df %>%
-                                  arrange(time)
-
-                              }))
+            dplyr::arrange(df, time)
+          }
+        )
+      )
   }
 
-  out<- out %>%
-    mutate(plot_ci_d= map(data,
-                          function(df) {
-                            nn<- nrow(df)
-                            # check http://stackoverflow.com/questions/33874909/how-do-i-add-shading-and-color-to-the-confidence-intervals-in-ggplot-2-generated
-                            ys<- rep( 1:nn, each = 2 )[ -2 * nn ]
-                            xs<- c( 1, rep( 2:nn, each = 2))
+  out <- out %>%
+    dplyr::mutate(
+      plot_ci_d = purrr::map(
+        data,
+        function(df) {
+          nn <- nrow(df)
+          # check http://stackoverflow.com/questions/33874909/how-do-i-add-shading-and-color-to-the-confidence-intervals-in-ggplot-2-generated
+          ys <- rep(1:nn, each = 2)[-2 * nn]
+          xs <- c(1, rep(2:nn, each = 2))
 
-                            df %$%
-                              tibble(time     = time[xs],
-                                     conf_low = conf_low[ys],
-                                     conf_high= conf_high[ys]) #%>%
-                              # filter(!(is.na(conf_low) & is.na(conf_high)))
-                          }))
+          df %$%
+            dplyr::tibble(
+              time = time[xs],
+              conf_low = conf_low[ys],
+              conf_high = conf_high[ys]
+            ) # %>%
+          # filter(!(is.na(conf_low) & is.na(conf_high)))
+        }
+      )
+    )
   return(out)
 }
 
@@ -326,26 +355,47 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
 #' run_logrank_test().
 #'
 #' @export
-estimate_km<- function(df, evt_time, evt, group, ...) {
+estimate_km<- function(df, evt_time, evt, group, ci_transformation = "log-log", ...) {
 
-  evt_time<- enquo(evt_time)
-  evt     <- enquo(evt)
-  group   <- enquo(group)
+  evt_time <- rlang::enquo(evt_time)
+  evt <- rlang::enquo(evt)
+  group <- rlang::enquo(group)
+  args_surfit <- rlang::enquos(...)
 
-  out<- if (quo_is_missing(group)) {
-    substitute(survfit(Surv(evt_time, evt) ~ 1, data= df, conf.type= "log-log", ...),
-               list(evt_time= quo_get_expr(evt_time),
-                    evt     = quo_get_expr(evt),
-                    df      = df))
+  out <- if (quo_is_missing(group)) {
+    rlang::quo_squash(
+      rlang::quo(
+        substitute(
+          survfit(Surv(!!evt_time, !!evt) ~ 1,
+            data = df,
+            conf.type = ci_type,
+            !!!args_surfit
+          ),
+          list(
+            df = df,
+            ci_type = ci_transformation
+          )
+        )
+      )
+    )
   } else {
-    substitute(survfit(Surv(evt_time, evt) ~ grp, data= df, conf.type= "log-log", ...),
-               list(evt_time= quo_get_expr(evt_time),
-                    evt     = quo_get_expr(evt),
-                    grp     = quo_get_expr(group),
-                    df      = df))
+    rlang::quo_squash(
+      rlang::quo(
+        substitute(
+          survfit(Surv(!!evt_time, !!evt) ~ !!group,
+            data = df,
+            conf.type = ci_type,
+            !!!args_surfit
+          ),
+          list(
+            df = df,
+            ci_type = ci_transformation
+          )
+        )
+      )
+    )
   }
-  out<- eval(out)
-  out
+  return(eval(eval(out)))
 }
 
 #' @export
@@ -384,21 +434,21 @@ show_surv<- function(surv_obj,
                      print_fig = TRUE) {
 
   # no need to add pvalues for a single cohort
-  add_pvalue<- if (all(names(surv_obj)!='strata')) FALSE else add_pvalue
+  add_pvalue <- if (all(names(surv_obj) != 'strata')) FALSE else add_pvalue
   # no need to add legend if it is a single cohort or add risk (when it is >1 cohorts). The at-risk table will be color-coded to indicate cohort
-  add_legend<- if (all(names(surv_obj)!='strata') | add_atrisk) FALSE else add_legend
+  add_legend <- if (all(names(surv_obj) != 'strata') | add_atrisk) FALSE else add_legend
 
-  color_scheme<- match.arg(color_scheme)
+  color_scheme <- match.arg(color_scheme)
   if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
 
   fill_fun <- switch(color_scheme,
                      'brewer' = quote(scale_fill_brewer(palette = "Set1")),
-                     'grey'   = quote(scale_fill_grey(start= 0, end= 0.65)),
+                     'grey' = quote(scale_fill_grey(start= 0, end= 0.75)),
                      'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
                      'manual' = match.call(do.call, call('do.call', what= 'scale_fill_manual', args= color_list)))
   color_fun<- switch(color_scheme,
                      'brewer' = quote(scale_color_brewer(palette = "Set1")),
-                     'grey'   = quote(scale_color_grey(start= 0, end= 0.65)),
+                     'grey' = quote(scale_color_grey(start= 0, end= 0.75)),
                      'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
                      'manual' = match.call(do.call, call('do.call', what= 'scale_color_manual', args= color_list)))
 
@@ -421,26 +471,25 @@ show_surv<- function(surv_obj,
 
   plot_prob_d<- surv_mat %>%
     dplyr::select(strata, plot_prob_d) %>%
-    unnest(cols = c(plot_prob_d)) %>%
-    mutate(prob= if (plot_cdf) 1-prob else prob)
+    tidyr::unnest(cols = c(plot_prob_d)) %>%
+    dplyr::mutate(prob= if (plot_cdf) 1-prob else prob)
 
-  if (y_lim[2]< 1) {
-    plot_prob_d<- plot_prob_d %>%
-      mutate(prob= pmin(prob, y_lim[2], na.rm= TRUE),
-             # prob= pmax(prob, min(y_lim, na.rm = TRUE), na.rm= TRUE)
-      ) %>%
-      group_by(strata)
+  if (y_lim[2] < 1) {
+    plot_prob_d <- plot_prob_d %>%
+      dplyr::mutate(prob = pmin(prob, y_lim[2], na.rm = TRUE)) %>%
+      dplyr::group_by(strata)
   }
 
   out<- ggplot() +
     geom_step(data= plot_prob_d,
               aes(x= time, y= prob, group= strata, color= strata),
-              size= 1.1, show.legend = add_legend) +
+              linewidth = 1.1, show.legend = add_legend) +
     eval(color_fun) +
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
-                       expand= c(0.01, 0.005),
-                       labels= function(x) scales::comma(x, accuracy = 1))
+                      #  expand= c(0.01, 0.005),
+                       expand= c(0.01, 0),
+                       labels= function(x) scales::number(x, accuracy = 1))
 
   if (add_ci) {
     plot_ci_d<- surv_mat %>%
@@ -470,13 +519,12 @@ show_surv<- function(surv_obj,
   }
 
   out<- out + scale_y_continuous(name  = y_lab,
-                                 # name  = if (is.null(y_lab)) "Freedom from death" else y_lab,
                                  breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
-                                 # expand= c(0.01, 0.005),
                                  expand= c(0.005, 0),
                                  labels= function(x) scales::percent(x, accuracy = 1))
 
-  out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim, clip = "on") else out
+  # out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim, clip = "on") else out
+  out <- out + if (!is.null(y_lim)) coord_cartesian(ylim = y_lim, clip = "on") else coord_cartesian(clip = "on")
 
   if (add_pvalue) {
     pval<- run_logrank_test(surv_obj) %>%
@@ -970,7 +1018,3 @@ show_cif<- function(surv_obj,
   if (print_fig) print(out)
   return(out)
 }
-
-
-
-

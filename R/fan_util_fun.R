@@ -38,35 +38,51 @@ decimalplaces <- function(x, max_dec= 4L) {
 
 #' @title format_pvalue
 #'
-#' @details An internal function that formats p-values according to the statistical guidelines of the Annals of Medicine.
+#' @description
+#' Format p-values according to statistical guidelines (similar to Annals of Medicine format).
+#' This function is optimized for use with gtsummary but maintains compatibility with the
+#' original implementation.
 #'
-#' @param x Numeric variable
-#' @return character variables reporting p-values
+#' @details
+#' P-values >= 0.1995 are formatted to 2 decimal places.
+#' P-values < 0.1995 are formatted to 3 decimal places.
+#' P-values < 0.001 are displayed as "<0.001".
+#'
+#' @param x Numeric vector of p-values
+#' @param eps Threshold for scientific notation (default: 0.001)
+#' @param trim Logical. Remove leading spaces (default: TRUE)
+#' @param droptrailing0 Logical. Remove trailing zeros (default: FALSE)
+#' @param pad Logical. Add padding (default: FALSE)
+#' @param ... Additional arguments passed to base::format.pval
+#'
+#' @return Character vector of formatted p-values
 #' @export
+#'
 format_pvalue <- function(x, eps = 0.001, trim = TRUE,
                           droptrailing0 = FALSE,
-                          # tex = TRUE,
                           pad = FALSE, ...) {
-  p<- vector("character", length = length(x))
+  p <- vector("character", length = length(x))
 
-  large<- !is.na(x) & x >= 0.1995 #Steve: if 0.2 then 0.196="0.200" and 0.201= "0.20"
-  p[large]<- base::format.pval(x[large],
-                               digits= 1,
-                               eps= 0.1995,
-                               na.form= "---",
-                               nsmall= 2,
-                               trim= trim,
-                               drop0trailing= droptrailing0,
-                               scientific = FALSE, ...)
+  large <- !is.na(x) & x >= 0.1995
+  p[large] <- base::format.pval(x[large],
+    digits = 1,
+    eps = 0.1995,
+    na.form = "---",
+    nsmall = 2,
+    trim = trim,
+    drop0trailing = droptrailing0,
+    scientific = FALSE, ...
+  )
 
-  p[!large]<- base::format.pval(x[!large],
-                                digits= 1,
-                                eps= eps,
-                                na.form= "---",
-                                nsmall= 3,
-                                trim= trim,
-                                drop0trailing= droptrailing0,
-                                scientific = FALSE, ...)
+  p[!large] <- base::format.pval(x[!large],
+    digits = 1,
+    eps = eps,
+    na.form = "---",
+    nsmall = 3,
+    trim = trim,
+    drop0trailing = droptrailing0,
+    scientific = FALSE, ...
+  )
 
   if (pad) p <- gsub("^([^<])", "  \\1", p)
   p
@@ -98,18 +114,6 @@ updateWorksheet<- function(wb, sheetName, x, ...) {
     openxlsx::writeData(wb, sheetName, x)
   }
   wb
-}
-
-
-#' @title recode_missing
-#'
-#' @details
-#' An internal function that replace missing value code with NA.
-#'
-#' @return input variable with NA
-recode_missing<- function(x, na.value= NULL) {
-  x[x %in% na.value]<- NA
-  x
 }
 
 #' @title construct_surv_var
@@ -161,21 +165,19 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
   if (quo_is_missing(patid))  stop("Please provide subject id")
 
   tmp_df<- df %>%
-    mutate(tmp_idx_dt= as.Date(as.character(!!idx_dt), origin= "1970-01-01"),
+    dplyr::mutate(tmp_idx_dt= as.Date(as.character(!!idx_dt), origin= "1970-01-01"),
            tmp_evt_dt= as.Date(as.character(!!evt_dt), origin= "1970-01-01"),
            tmp_end_dt= as.Date(as.character(!!end_dt), origin= "1970-01-01"),
-           evt       = ifelse(is.na(tmp_evt_dt), 0L, 1L),
-           time2evt  = as.numeric(ifelse(is.na(tmp_evt_dt),
-                                         tmp_end_dt - tmp_idx_dt,
-                                         tmp_evt_dt - tmp_idx_dt)),
+           evt       = ifelse(is.na(tmp_evt_dt), 0L, 1L), tmp_end_dt - tmp_idx_dt, tmp_evt_dt - tmp_idx_dt)),
     ) %>%
     dplyr::select(!!patid, time2evt, evt, matches("^tmp_(idx|evt|end)_dt$"))
-
-  flag<- FALSE
-  flag_df<- tmp_df %>%
-    filter(time2evt<=0) %>%
-    mutate(flag_evt_time_zero= (time2evt==0),
-           flag_evt_time_neg = (time2evt< 0))
+flag <- FALSE
+flag_df <- tmp_df %>%
+  dplyr::filter(time2evt <= 0) %>%
+  dplyr::mutate(
+    flag_evt_time_zero = (time2evt == 0),
+    flag_evt_time_neg = (time2evt < 0)
+  )
 
   if (any(tmp_df$time2evt==0)) {
     warning("Event at time zero")
@@ -185,24 +187,27 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
   if (any(tmp_df$time2evt<0)) {
     warning("Negative time-to-event!?")
-    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
+    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA_real_)
     flag<- TRUE
   }
 
   if (flag) print(as.data.frame(flag_df))
 
-  tmp_df<- if (is.null(surv_varname)) {
-    rename(tmp_df,
-           evt_time= time2evt)
+  tmp_df <- if (is.null(surv_varname)) {
+    dplyr::rename(tmp_df,
+      evt_time = time2evt
+    )
   } else {
-    rename(tmp_df,
-           !!surv_varname[1]:= time2evt,
-           !!surv_varname[2]:= evt)
+    dplyr::rename(
+      tmp_df,
+      !!surv_varname[1] := time2evt,
+      !!surv_varname[2] := evt
+    )
   }
 
   if (append) {
     df %>%
-      inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
+      dplyr::inner_join(dplyr::select(tmp_df, -matches("^tmp_(idx|evt|end)_dt$")), by= as_name(patid))
   } else {
     tmp_df %>%
       dplyr::select(-matches("^tmp_(idx|evt|end)_dt$"))
@@ -212,98 +217,210 @@ construct_surv_var<- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname= N
 
 #' @title construct_cmprisk_var
 #'
+#' @description
+#' Creates time-to-event variables for competing risk analysis from date variables.
+#' Requires an index date (time zero), event date, competing event date(s), and last follow-up date.
+#'
 #' @details
-#' The function creates time-to-event variables for competing risk data
+#' This function processes dates to create:
+#' - `evt_time`: the time from index to first event (either event of interest or competing event)
+#' - `evt`: a factor indicating the event type (0=censored, 1=event of interest, 2+=competing events)
+#'
+#' The function handles:
+#' - Events occurring before end of follow-up
+#' - Censoring at the last follow-up date
+#' - Multiple competing events (requires separate date columns for each)
+#' - Validation of date ranges and consistency
+#' - Flags records with events at index date (sets evt_time to 0.5)
+#' - Flags records with events before index date
+#'
+#' @param df Input data frame
+#' @param patid Name of patient ID column (unquoted)
+#' @param idx_dt Name of index date column (unquoted) - time zero (no missing values allowed)
+#' @param evt_dt Name of event date column (unquoted) - event of interest (missing if event doesn't occur)
+#' @param end_dt Name of end of follow-up date column (unquoted) (can be missing if event occurred)
+#' @param ... Additional competing event date columns (unquoted), passed as name=column
+#' @param varname Character vector of output variable names: c("time_var_name", "event_var_name")
+#'                If NULL, uses c("evt_time", "evt")
+#' @param append Logical. If TRUE, appends to original data; if FALSE, returns only new variables
+#'
+#' @return A data frame with patient ID and event time / event indicator variables
+#'
+#' @examples
+#' \dontrun{
+#' set.seed(0)
+#' test_df <- data.frame(
+#'   patid = 1:100,
+#'   idx_dt = as.Date("2020-01-01"),
+#'   evt_dt = c(NA, sample(0:200, 99)) + as.Date("2020-01-01"),
+#'   cmp_evt_dt = c(NA, sample(50:250, 99)) + as.Date("2020-01-01"),
+#'   end_dt = sample(100:300, 100) + as.Date("2020-01-01")
+#' )
+#'
+#' # Basic usage
+#' result <- construct_cmprisk_var_revised(
+#'   test_df,
+#'   patid = patid,
+#'   idx_dt = idx_dt,
+#'   evt_dt = evt_dt,
+#'   end_dt = end_dt,
+#'   cmp_evt_1 = cmp_evt_dt
+#' )
+#'
+#' # With custom variable names
+#' result <- construct_cmprisk_var_revised(
+#'   test_df,
+#'   patid = patid,
+#'   idx_dt = idx_dt,
+#'   evt_dt = evt_dt,
+#'   end_dt = end_dt,
+#'   cmp_evt_1 = cmp_evt_dt,
+#'   varname = c("ftime", "fstatus")
+#' )
+#' }
 #'
 #' @export
-construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname= NULL, append= FALSE, ...) {
-  patid <- enquo(patid)
-  idx_dt<- enquo(idx_dt)
-  evt_dt<- enquo(evt_dt)
-  end_dt<- enquo(end_dt)
-  cmp_evt_dt<- enquos(...)
+#' @importFrom rlang enquo quo_is_missing quo_name quo_get_expr
+#' @importFrom dplyr select mutate filter bind_cols tibble
+#'
+construct_cmprisk_var <- function(df,
+                                  patid,
+                                  idx_dt,
+                                  evt_dt,
+                                  end_dt,
+                                  ...,
+                                  varname = NULL,
+                                  append = FALSE) {
 
-  if (quo_is_missing(idx_dt)) stop("No index date (time zero).")
-  if (quo_is_missing(evt_dt)) stop("No event date.")
-  if (quo_is_missing(end_dt)) stop("No date of the end of follow-up.")
-  if (quo_is_missing(patid))  stop("Please provide subject id")
+  # Capture variable names using non-standard evaluation
+  patid <- rlang::enquo(patid)
+  idx_dt <- rlang::enquo(idx_dt)
+  evt_dt <- rlang::enquo(evt_dt)
+  end_dt <- rlang::enquo(end_dt)
+  cmp_evt_list <- rlang::enquos(...)
 
-  n_cmp_evt<- length(cmp_evt_dt)
-  names(cmp_evt_dt)<- sapply(cmp_evt_dt, lazyeval::as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
+  # Validate inputs
+  if (rlang::quo_is_missing(idx_dt)) stop("Index date (idx_dt) is required.")
+  if (rlang::quo_is_missing(evt_dt)) stop("Event date (evt_dt) is required.")
+  if (rlang::quo_is_missing(end_dt)) stop("End of follow-up date (end_dt) is required.")
+  if (rlang::quo_is_missing(patid)) stop("Patient ID (patid) is required.")
 
-  cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
-  evt_desc<- c('evt_1', cmp_evt_desc, 'censored_0')
+  # Get variable names
+  patid_name <- rlang::quo_name(patid)
+  idx_dt_name <- rlang::quo_name(idx_dt)
+  evt_dt_name <- rlang::quo_name(evt_dt)
+  end_dt_name <- rlang::quo_name(end_dt)
 
-  tmp_df<- df %>%
-    dplyr::select(!!patid, !!idx_dt, !!evt_dt, !!!cmp_evt_dt, !!end_dt) %>%
-    group_by(!!patid) %>%
-    # mutate(first_evt_dt= pmin(!!evt_dt, !!!cmp_evt_dt, !!end_dt, na.rm= TRUE))
-    mutate(first_evt= ifelse(is_empty((evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))])),
-                             NA, (evt_desc[which.min(c(!!evt_dt, !!!cmp_evt_dt, !!end_dt))])),
-           first_evt_dt= pmin(!!evt_dt, !!!cmp_evt_dt, !!end_dt, na.rm= TRUE),
-
-           time2evt= case_when(
-             is.infinite(first_evt_dt) | is.na(first_evt_dt) ~ NA_real_,
-             TRUE ~ as.numeric(first_evt_dt - !!idx_dt)),
-
-           # Steve: this is the part of the code that generates warning messages.
-           # evt= case_when(
-           #   is.na(time2evt) ~ NA_integer_,
-           #   first_evt=='censored' ~ 0L,
-           #   first_evt=='evt' ~ 1L,
-           #   TRUE ~ as.integer(gsub('^cmp_evt_', '', first_evt))),
-
-           evt= case_when(
-             is.na(time2evt) ~ NA_integer_,
-             TRUE ~ as.integer(gsub('^(cmp_evt|evt|censored)_', '', first_evt))),
-    ) %>%
-    ungroup()
-
-  # per documentation, evt will be treated as a factor with the 1st level as censoring
-  # in the situtation in which no pts are censored, no observations have a value of zero.
-  # need to convert evt to a factor forcing 0 as the first level of the factor.
-  tmp_df<- tmp_df %>%
-    mutate(evt= factor(evt, 0:(n_cmp_evt + 1), labels = 0:(n_cmp_evt + 1)))
-
-
-  flag<- FALSE
-  flag_df<- tmp_df %>%
-    filter(time2evt<=0) %>%
-    mutate(flag_evt_time_zero= (time2evt==0),
-           flag_evt_time_neg = (time2evt< 0))
-
-  if (any(tmp_df$time2evt==0)) {
-    warning("Event at time zero")
-    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt==0, 0.5)
-    flag<- TRUE
-  }
-
-  if (any(tmp_df$time2evt<0)) {
-    warning("Negative time-to-event!?")
-    tmp_df$time2evt<- replace(tmp_df$time2evt, tmp_df$time2evt<0, NA)
-    flag<- TRUE
-  }
-
-  if (flag) print(as.data.frame(flag_df))
-
-  tmp_df<- if (is.null(cmprisk_varname)) {
-    tmp_df %>%
-      select(!!patid, time2evt, evt) %>%
-      rename(evt_time= time2evt)
+  # Set output variable names
+  if (is.null(varname)) {
+    evt_time_name <- "evt_time"
+    evt_name <- "evt"
   } else {
-    tmp_df %>%
-      select(!!patid, time2evt, evt) %>%
-      rename(!!cmprisk_varname[1]:= time2evt,
-             !!cmprisk_varname[2]:= evt)
+    evt_time_name <- varname[1]
+    evt_name <- varname[2]
   }
 
-  # tmp_df<- dplyr::select(tmp_df, !!patid, one_of(c(cmprisk_varname, 'evt_time', 'evt')))
+  # Initialize result data frame
+  result <- df %>%
+    dplyr::select(!!patid) %>%
+    dplyr::mutate(
+      evt_time = NA_real_,
+      evt = NA_integer_,
+      flag_event_at_index = FALSE,
+      flag_event_before_index = FALSE,
+      flag_insufficient_info = FALSE
+    )
 
-  if (!append) tmp_df else {
-    df %>%
-      inner_join(tmp_df, by= as_name(patid))
+  # Process each row to determine first event
+  for (i in 1:nrow(df)) {
+    # Get dates for this row
+    idx_date <- df[[idx_dt_name]][i]
+    evt_date <- df[[evt_dt_name]][i]
+    end_date <- df[[end_dt_name]][i]
+
+    # Collect all event dates (event of interest, competing events, end of follow-up)
+    event_dates <- list(
+      "event_of_interest" = evt_date,
+      "end_of_followup" = end_date
+    )
+
+    # Add competing events
+    for (j in seq_along(cmp_evt_list)) {
+      event_dates[[paste0("competing_", j)]] <- df[[rlang::quo_name(cmp_evt_list[[j]])]][i]
+    }
+
+    # Find non-NA dates
+    valid_dates <- event_dates[!sapply(event_dates, is.na)]
+
+    if (length(valid_dates) == 0) {
+      # No events occurred - this shouldn't happen if end_dt is provided
+      result$evt[i] <- NA_integer_
+      result$evt_time[i] <- NA_real_
+      result$flag_insufficient_info[i] <- TRUE
+      warning("Some rows have no sufficient information to determine event status - check input data")
+      next
+    }
+
+    # Find the earliest date
+    earliest_date <- as.Date(min(unlist(valid_dates), na.rm = TRUE))
+    earliest_event <- names(valid_dates)[which.min(unlist(valid_dates))]
+
+    # Determine event type
+    result$evt[i] <- if (earliest_event == "event_of_interest") {
+      1L
+    } else if (grepl("^competing_", earliest_event)) {
+      # Extract competing event number
+      1L + as.integer(gsub("competing_", "", earliest_event)) # Competing events start at 2
+    } else if (earliest_event == "end_of_followup") {
+      0L  # Right censored
+    }
+
+    # Calculate time to event
+    evt_time_days <- as.numeric(earliest_date - idx_date)
+    result$evt_time[i] <- evt_time_days
+
+    # Flag special cases
+    if (evt_time_days == 0) {
+      result$flag_event_at_index[i] <- TRUE
+      result$evt_time[i] <- 0.5  # Set to 0.5 as per requirements
+    } else if (evt_time_days < 0) {
+      result$flag_event_before_index[i] <- TRUE
+      result$evt[i] <- NA_integer_
+      result$evt_time[i] <- NA_real_ # Set to NA for invalid cases
+      warning(paste0("Subject ", df[[patid_name]][i], ": Event occurred before index date (evt_time = ", evt_time_days, ")"))
+    }
+  }
+
+  # Convert event status to factor
+  result[[evt_name]] <- factor(result[[evt_name]],
+      levels = 0L:(length(cmp_evt_list) + 1L),
+      labels = 0L:(length(cmp_evt_list) + 1L)
+  )
+
+  flag_entry <- result$flag_event_at_index | result$flag_event_before_index | result$flag_insufficient_info
+  if (any(flag_entry)) {
+      cat("Warning: Some rows have error flags:\n")
+      print(
+          result %>%
+              filter(flag_entry) %>%
+              dplyr::left_join(df, by = patid_name) %>%
+              select(!!patid, !!idx_dt, !!evt_dt, !!end_dt, !!!cmp_evt_list,
+                  evt_time, evt, starts_with("flag_"))
+      )
+  }
+
+  # Rename columns
+  colnames(result)[colnames(result) == "evt_time"] <- evt_time_name
+  colnames(result)[colnames(result) == "evt"] <- evt_name
+
+  # Return result
+  if (append) {
+    dplyr::full_join(df, dplyr::select(result, -starts_with("flag_")), by = patid_name)
+  } else {
+    dplyr::select(result, -starts_with("flag_"))
   }
 }
+
 # debug(construct_cmprisk_var)
 # onstruct_cmprisk_var(df= test,
 #                      patid= patid,
@@ -335,7 +452,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
 #' @export
-admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_var= FALSE) {
+admin_censor_surv <- function(df, evt_time, evt, adm_cnr_time = NULL, overwrite_var = FALSE) {
   ######################################################################################
   ## the function creates administrately censored version of event time and indicator ##
   ## for survival (binary) process                                                    ##
@@ -345,22 +462,23 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
   ##   adm_cnr_time - time at which admin censoring is applied                        ##
   ######################################################################################
 
-  evt_time<- enquo(evt_time)
-  evt     <- enquo(evt)
+  evt_time <- enquo(evt_time)
+  evt <- enquo(evt)
 
   if (!is.null(adm_cnr_time)) {
-
     if (overwrite_var) {
-      cnr_evt_time_name<- lazyeval::as_name(evt_time)
-      cnr_evt_name     <- lazyeval::as_name(evt)
+      cnr_evt_time_name <- lazyeval::as_name(evt_time)
+      cnr_evt_name <- lazyeval::as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(lazyeval::as_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(lazyeval::as_name(evt), "_adm")
+      cnr_evt_time_name <- paste0(lazyeval::as_name(evt_time), "_adm")
+      cnr_evt_name <- paste0(lazyeval::as_name(evt), "_adm")
     }
 
-    df<- df %>%
-      mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!=0, 0),
-             !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
+    df <- df %>%
+      mutate(
+        !!cnr_evt_name := replace(!!evt, !!evt_time > adm_cnr_time & !!evt != 0, 0),
+        !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
+      )
   }
 
   df
@@ -385,47 +503,41 @@ admin_censor_surv<- function(df, evt_time, evt, adm_cnr_time= NULL, overwrite_va
 #' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 #' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
 #' @export
-admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label= NULL, overwrite_var= FALSE) {
-
-  evt_time<- enquo(evt_time)
-  evt<- enquo(evt)
+admin_censor_cmprisk <- function(df, evt_time, evt, adm_cnr_time = NULL, evt_label = NULL, overwrite_var = FALSE) {
+  evt_time <- enquo(evt_time)
+  evt <- enquo(evt)
 
   if (is.null(adm_cnr_time)) {
-
     stop("No administrative censor time is given.")
-    # if (!is.null(evt_label)) {
-    #   # df<- df %>%
-    #   #   mutate(!!lazyeval::as_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
-    #   # df[[as_name(evt)]]<- evt_label[levels(df[[as_name(evt)]])]
-    #   df$as_name(evt)<- evt_label[levels(df$as_name(evt))]
-    # }
-
   } else {
-
     if (overwrite_var) {
-      cnr_evt_time_name<- lazyeval::as_name(evt_time)
-      cnr_evt_name     <- lazyeval::as_name(evt)
+      cnr_evt_time_name <- lazyeval::as_name(evt_time)
+      cnr_evt_name <- lazyeval::as_name(evt)
     } else {
-      cnr_evt_time_name<- paste0(lazyeval::as_name(evt_time), "_adm")
-      cnr_evt_name     <- paste0(lazyeval::as_name(evt), "_adm")
+      cnr_evt_time_name <- paste0(lazyeval::as_name(evt_time), "_adm")
+      cnr_evt_name <- paste0(lazyeval::as_name(evt), "_adm")
     }
 
-    df<- if (is.null(evt_label)) {
-      df %>%
-        mutate(!!cnr_evt_name      := replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= "0", "0"),
-               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
-    } else {
-      df %>%
-        mutate(!!cnr_evt_name      := factor(replace(!!evt, !!evt_time> adm_cnr_time & !!evt!= "0", "0"),
-                                             # as.integer(names(evt_label)),
-                                             names(evt_label),
-                                             labels = evt_label),
-               !!cnr_evt_time_name := replace(!!evt_time, !!evt_time>adm_cnr_time, adm_cnr_time))
-    }
+    df <- df %>%
+      {
+        if (is.null(evt_label)) {
+          mutate(
+            !!cnr_evt_name := replace(!!evt, !!evt_time > adm_cnr_time & !!evt != "0", "0"),
+            !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
+          )
+        } else {
+          mutate(
+            !!cnr_evt_name := factor(replace(!!evt, !!evt_time > adm_cnr_time & !!evt != "0", "0"),
+              # as.integer(names(evt_label)),
+              names(evt_label),
+              labels = evt_label
+            ),
+            !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
+          )
+        }
+      }
   }
 
-  # df<- if (overwrite_var | is.null(evt_label)) df else mutate(df,
-  #                                                             !!quo_name(evt):= factor(!!evt, as.integer(names(evt_label)), labels = evt_label))
   df
 }
 
@@ -437,7 +549,9 @@ admin_censor_cmprisk<- function(df, evt_time, evt, adm_cnr_time= NULL, evt_label
 #'
 #' @export
 summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
-  ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
+
+  ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times, extend = TRUE)
+
   if (failure_fun) {
     ff<- 1 - ss$surv
     ll<- 1 - ss$upper
@@ -448,46 +562,43 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
     ss$upper<- uu
   }
 
-  out<- if (any(names(fit)=="strata")) {
+  out <- ss %$%
+    {
+      if (any(names(ss) == "strata")) {
+        tibble(
+          strata = strata,
+          time = time,
+          surv = surv,
+          conf_low = lower,
+          conf_high = upper
+        )
+      } else {
+        tibble(
+          time = time,
+          surv = surv,
+          conf_low = lower,
+          conf_high = upper
+        )
+      }
+    } %>%
+    dplyr::mutate(
+      stat = case_when(
+        is.na(surv) ~ "---",
+        !is.na(surv) & is.na(conf_low) & is.na(conf_high) ~ sprintf("%3.1f%% [---]", surv * 100),
+        !is.na(surv) & is.na(conf_low) & !is.na(conf_high) ~ sprintf("%3.1f%% [---, %3.1f%%]", surv * 100, conf_high * 100),
+        !is.na(surv) & !is.na(conf_low) & is.na(conf_high) ~ sprintf("%3.1f%% [%3.1f%%, ---]", surv * 100, conf_low * 100),
+        TRUE ~ sprintf("%3.1f%% [%3.1f%%, %3.1f%%]", surv * 100, conf_low * 100, conf_high * 100)
+      )
+    ) %>%
+    {
+      if (any(names(ss) == "strata")) {
+        dplyr::mutate(., strata = gsub("^.*=", "", strata))
+      } else {
+        dplyr::mutate(., strata = "Overall")
+      }
+    } %>%
+    pivot_wider(., id_cols = time, names_from = strata, values_from = stat)
 
-    ss %$%
-      map2(.x= c('surv', 'conf_low', 'conf_high'),
-           .y= list(surv= surv, lower= lower, upper= upper),
-           .f= function(var, mat, ...) {
-             mat %>%
-               as.data.frame() %>%
-               mutate(strata= strata,
-                      times = time) %>%
-               melt(id.vars= c('strata', 'times'),
-                    value.name = var) %>%
-               dplyr::select(-variable)
-           }) %>%
-      reduce(full_join, by = c('strata', 'times')) %>%
-      mutate_at(vars(one_of('surv', 'conf_low', 'conf_high')),
-                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(surv, " [", conf_low, ", ", conf_high, "]")) %>%
-      dcast(times ~ strata, value.var = 'stat')
-
-  } else {
-
-    ss %$%
-      map2(.x= c('surv', 'conf_low', 'conf_high'),
-           .y= list(surv= surv, lower= lower, upper= upper),
-           .f= function(var, mat, ...) {
-             mat %>%
-               as.data.frame() %>%
-               mutate(times = time) %>%
-               melt(id.vars= c('times'),
-                    value.name = var) %>%
-               dplyr::select(-variable)
-           }) %>%
-      reduce(full_join, by = c('times')) %>%
-      mutate_at(vars(one_of('surv', 'conf_low', 'conf_high')),
-                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(surv, " [", conf_low, ", ", conf_high, "]")) %>%
-      dcast(times ~ 'Overall', value.var = 'stat')
-
-  }
   out
 }
 
@@ -500,8 +611,10 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
 #'
 #' @export
 summarize_cif<- function(fit, times= NULL) {
-  ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times)
-  colnames(ss$pstate)<- colnames(ss$lower)<- colnames(ss$upper)<- replace(ss$state, sapply(ss$states, nchar)==0, "0")
+  ss <- summary(fit, times = if (is.null(times)) pretty(fit$time) else times, extend = TRUE)
+  colnames(ss$pstate) <-
+    colnames(ss$lower) <-
+    colnames(ss$upper) <- replace(ss$state, sapply(ss$states, nchar) == 0, "0")
   # if (is.null(ss$prev)) ss$prev<- ss$pstate
 
   out<- if (any(names(fit)=="strata")) {
