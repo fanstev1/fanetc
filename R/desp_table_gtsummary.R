@@ -12,10 +12,11 @@
 #' If a group variable is provided, it also assesses between-group differences using appropriate
 #' statistical tests based on the number of groups:
 #'
-#' **For continuous variables:**
-#' - **2 groups:** Wilcox rank-sum test (non-parametric alternative to t-test)
-#' - **>2 groups:** Kruskal-Wallis test (non-parametric alternative to ANOVA)
-#' - Summary statistics: Mean ± SD and Median (Q1 - Q3)
+#' **For continuous variables** (test follows the chosen \code{continuous_stat}):
+#' - \code{continuous_stat = "meansd"}: Welch t-test (2 groups) or one-way ANOVA (>2 groups);
+#'   summary statistic is Mean ± SD
+#' - \code{continuous_stat = "mediqr"}: Wilcoxon rank-sum test (2 groups) or Kruskal-Wallis
+#'   test (>2 groups); summary statistic is Median (Q1 - Q3), using type-1 quantiles
 #' - Decimal places automatically match the variable's actual precision using decimalplaces()
 #'
 #' **For categorical variables (including logical/binary):**
@@ -28,12 +29,20 @@
 #'
 #' @param df Dataframe consisting of numeric, logical, and factor variables
 #' @param group Name of the grouping variable (optional). Can have 2 or more levels.
+#' @param datadic Optional data dictionary with variable descriptions. By default it should
+#'                 have columns var_name (original variable names) and var_desp (display
+#'                 labels); use the \code{var_name}/\code{var_desp} arguments to point to
+#'                 differently named columns
+#' @param var_name Column of \code{datadic} holding the variable names (unquoted or string;
+#'        default \code{var_name}). Kept for backward compatibility with the pre-gtsummary API.
+#' @param var_desp Column of \code{datadic} holding the display labels (unquoted or string;
+#'        default \code{var_desp}). Kept for backward compatibility with the pre-gtsummary API.
 #' @param include Vector of variable names to include (optional; default includes all except group)
-#' @param datadic Optional data dictionary with variable descriptions. Should have columns:
-#'                 var_name (original variable names) and var_desp (display labels)
-#' @param missing Type of missing data display: "no" (default), "ifany", or "always"
-#' @param missing_text Text to display for missing count. Default: "Unknown"
-#' @param missing_group_exclude Text to display for missing as another factor level. Default: TRUE (exclude from group comparisons)
+#' @param missing Type of missing data display: "ifany" (default), "no", or "always"
+#' @param missing_text Text to display for missing count. Default: "(Missing)"
+#' @param missing_group_exclude Logical. If TRUE (default), observations with a missing group
+#'        value are excluded; if FALSE, they are kept as an explicit factor level named
+#'        \code{missing_text}
 #' @param add_p Logical. Add p-values for between-group comparisons (default: TRUE if group specified)
 #' @param add_overall Logical. Add column with overall statistics (default: TRUE if group specified)
 #' @param sort_by_p Logical. Sort rows by p-value (default: FALSE)
@@ -72,8 +81,10 @@
 #'
 table_one <- function(df,
                       group,
-                      include,
                       datadic = NULL,
+                      var_name,
+                      var_desp,
+                      include,
                       missing = "ifany",
                       missing_text = "(Missing)",
                       missing_group_exclude = TRUE,
@@ -89,9 +100,18 @@ table_one <- function(df,
   # Capture group variable (for NSE)
   group <- rlang::enquo(group)
   include <- rlang::enquo(include)
-  
+
   has_group <- !rlang::quo_is_missing(group)
   has_include <- !rlang::quo_is_missing(include)
+
+  # datadic column selectors (unquoted symbols or strings, as in the old API)
+  var_name <- rlang::enquo(var_name)
+  var_desp <- rlang::enquo(var_desp)
+  name_col <- if (rlang::quo_is_missing(var_name)) "var_name" else rlang::as_name(var_name)
+  desp_col <- if (rlang::quo_is_missing(var_desp)) "var_desp" else rlang::as_name(var_desp)
+  if (!is.null(datadic) && !all(c(name_col, desp_col) %in% names(datadic))) {
+    stop("`datadic` must contain columns `", name_col, "` and `", desp_col, "`")
+  }
 
   # Set defaults for add_p and add_overall
   if (is.null(add_p)) add_p <- has_group
@@ -129,16 +149,25 @@ table_one <- function(df,
         if (missing_group_exclude) {
           dplyr::filter(., !is.na(!!group))
         } else {
-          dplyr::mutate(., !!group := forcats::fct_explicit_na(!!group, na_level = missing_text))
+          dplyr::mutate(., !!group := forcats::fct_na_value_to_level(!!group, level = missing_text))
         }
     }
 
     group_col<- if (missing_group_exclude) {
         group_col[!is.na(group_col)]
     } else {
-      forcats::fct_explicit_na(group_col, na_level = missing_text)
+      forcats::fct_na_value_to_level(group_col, level = missing_text)
     }
   }
+
+  # gtsummary requires glue strings for statistics; med_q1_q3 uses type-1
+  # quantiles to match the historical med_iqr() output
+  continuous_glue <- if (continuous_stat == "meansd") {
+    "{mean} ± {sd}"
+  } else {
+    "{median_type1} ({q1_type1} – {q3_type1})"
+  }
+  n_continuous_stats <- if (continuous_stat == "meansd") 2L else 3L
 
   # Calculate decimal places for each numeric variable using decimalplaces()
   # This ensures formatting matches the actual data precision
@@ -147,9 +176,7 @@ table_one <- function(df,
 
   for (var in numeric_vars) {
     dec <- decimalplaces(df[[var]])
-    # For format: mean, sd, median, p25, p75
-    # All use same decimal places for consistency
-    digits_list[[var]] <- rep(dec, 5)
+    digits_list[[var]] <- rep(dec, n_continuous_stats)
   }
 
   # For categorical variables: count and percentage
@@ -166,7 +193,7 @@ table_one <- function(df,
     missing = missing,
     missing_text = missing_text,
     statistic = list(
-      all_continuous() ~ if (continuous_stat == "meansd") mean_sd else med_iqr,
+      all_continuous() ~ continuous_glue,
       all_categorical(dichotomous = FALSE) ~ "{n} ({p}%)",
       all_dichotomous() ~ "{n} ({p}%)"
     ),
@@ -176,11 +203,8 @@ table_one <- function(df,
       all_dichotomous() ~ "dichotomous"
     ),
     label = if (!is.null(datadic)) {
-      # Create label list from data dictionary
-      setNames(
-        datadic[[deparse(substitute(var_desp))]],
-        datadic[[deparse(substitute(var_name))]]
-      )
+      # gtsummary requires a named list (not a named vector)
+      as.list(setNames(datadic[[desp_col]], datadic[[name_col]]))
     } else NULL
   ) %>%
     # Add p-values if comparing groups
@@ -229,7 +253,7 @@ table_one <- function(df,
     # Sort by p-value if requested
     {
       if (sort_by_p & add_p & has_group) {
-        gtsummary::modify_rows_print(., rows = order(.data$p.value, na.last = TRUE))
+        gtsummary::sort_p(.)
       } else {
         .
       }
@@ -242,6 +266,12 @@ table_one <- function(df,
 # table_one(df, group = sex)
 # table_one(df, include = c(male, age))
 # table_one(df, group = sex, include = c(group, age))
+
+# Type-1 quantile statistics referenced by name in the tbl_summary() glue
+# string, matching the historical med_iqr() output
+median_type1 <- function(x) stats::quantile(x, probs = 0.5, type = 1, names = FALSE, na.rm = TRUE)
+q1_type1 <- function(x) stats::quantile(x, probs = 0.25, type = 1, names = FALSE, na.rm = TRUE)
+q3_type1 <- function(x) stats::quantile(x, probs = 0.75, type = 1, names = FALSE, na.rm = TRUE)
 
 #' @title format_pvalue
 #'

@@ -36,58 +36,7 @@ decimalplaces <- function(x, max_dec= 4L) {
   out
 }
 
-#' @title format_pvalue
-#'
-#' @description
-#' Format p-values according to statistical guidelines (similar to Annals of Medicine format).
-#' This function is optimized for use with gtsummary but maintains compatibility with the
-#' original implementation.
-#'
-#' @details
-#' P-values >= 0.1995 are formatted to 2 decimal places.
-#' P-values < 0.1995 are formatted to 3 decimal places.
-#' P-values < 0.001 are displayed as "<0.001".
-#'
-#' @param x Numeric vector of p-values
-#' @param eps Threshold for scientific notation (default: 0.001)
-#' @param trim Logical. Remove leading spaces (default: TRUE)
-#' @param droptrailing0 Logical. Remove trailing zeros (default: FALSE)
-#' @param pad Logical. Add padding (default: FALSE)
-#' @param ... Additional arguments passed to base::format.pval
-#'
-#' @return Character vector of formatted p-values
-#' @export
-#'
-format_pvalue <- function(x, eps = 0.001, trim = TRUE,
-                          droptrailing0 = FALSE,
-                          pad = FALSE, ...) {
-  p <- vector("character", length = length(x))
-
-  large <- !is.na(x) & x >= 0.1995
-  p[large] <- base::format.pval(x[large],
-    digits = 1,
-    eps = 0.1995,
-    na.form = "---",
-    nsmall = 2,
-    trim = trim,
-    drop0trailing = droptrailing0,
-    scientific = FALSE, ...
-  )
-
-  p[!large] <- base::format.pval(x[!large],
-    digits = 1,
-    eps = eps,
-    na.form = "---",
-    nsmall = 3,
-    trim = trim,
-    drop0trailing = droptrailing0,
-    scientific = FALSE, ...
-  )
-
-  if (pad) p <- gsub("^([^<])", "  \\1", p)
-  p
-}
-
+# format_pvalue() now lives in R/desp_table_gtsummary.R
 
 #' @title updateWorksheet
 #'
