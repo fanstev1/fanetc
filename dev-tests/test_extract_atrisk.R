@@ -35,30 +35,46 @@ r_def <- extract_atrisk(fit)
 check("default time.list: wide shape", identical(names(r_def), c("time", "1", "2")))
 
 ## ---- add_atrisk renders the right numbers ----
+# base plot mimics show_surv/show_cif: no scale limits (they use coord_cartesian or none)
 p <- ggplot(data.frame(time = c(0, 1000), prob = c(1, 0)), aes(time, prob)) +
-  geom_step() +
-  scale_x_continuous(limits = c(0, 1000)) +
-  scale_y_continuous(limits = c(0, 1))
-out <- add_atrisk(p, fit, x_break = breaks)
+  geom_step()
 
-labs <- unlist(lapply(out$layers, function(l) {
-  g <- l$geom_params$grob
-  if (inherits(g, "text")) as.character(g$label) else NULL
-}))
-labs <- trimws(labs)
+# text labels regardless of implementation (annotation_custom grob or text layer data)
+get_labels <- function(p) {
+  trimws(unlist(lapply(p$layers, function(l) {
+    g <- l$geom_params$grob
+    if (inherits(g, "text")) return(as.character(g$label))
+    if (is.data.frame(l$data) && !is.null(l$data$label)) return(as.character(l$data$label))
+    NULL
+  })))
+}
+panel_ranges <- function(p) {
+  pp <- ggplot_build(p)$layout$panel_params[[1]]
+  list(x = pp$x.range, y = pp$y.range)
+}
+
+out <- add_atrisk(p, fit, x_break = breaks)
+labs <- get_labels(out)
 expected_counts <- as.character(c(ref_wide))          # 138 62 20 7 90 53 21 3
 check("add_atrisk: header + 2 strata rows + 8 cells",
       sum(labs == "At-risk N:") == 1 && all(c("1:", "2:") %in% labs))
 check("add_atrisk: all 8 stratified counts rendered",
       all(expected_counts %in% labs) &&
         sum(labs %in% expected_counts) == length(expected_counts))
+check("add_atrisk: panel ranges unchanged (no ylim set by caller)",
+      isTRUE(all.equal(panel_ranges(p), panel_ranges(out))))
 
 out1 <- add_atrisk(p, fit1, x_break = breaks)
-labs1 <- trimws(unlist(lapply(out1$layers, function(l) {
-  g <- l$geom_params$grob
-  if (inherits(g, "text")) as.character(g$label) else NULL
-})))
+labs1 <- get_labels(out1)
 check("add_atrisk no strata: 4 overall counts rendered",
       all(as.character(ref1$n.risk) %in% labs1))
+check("add_atrisk no strata: panel ranges unchanged",
+      isTRUE(all.equal(panel_ranges(p), panel_ranges(out1))))
+
+# caller-supplied coord limits (as in show_surv) must survive add_atrisk
+p_lim <- p + coord_cartesian(ylim = c(0, 1), clip = "on")
+out_lim <- add_atrisk(p_lim, fit, x_break = breaks)
+check("add_atrisk: existing coord ylim preserved",
+      isTRUE(all.equal(panel_ranges(p_lim)$y, panel_ranges(out_lim)$y)))
 
 cat(if (ok) "\nALL AT-RISK CHECKS PASS\n" else "\nAT-RISK FAILURES PRESENT\n")

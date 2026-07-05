@@ -46,12 +46,31 @@ DESCRIPTION. Runtime needs **gtsummary, cardx, broom >= 1.0.5** — confirm on D
 
 ## Next steps (priority order)
 
-1. Dedupe show_surv/show_cif in event_time_desp.R: the ~62-line p-value-position
-   if/else chain is duplicated verbatim (lines ~542 and ~927) — replace with a small
-   lookup helper; same for the four near-identical fill_fun/color_fun switch blocks.
-2. `add_atrisk()` adds one annotation_custom layer per table cell (nested loops) —
-   replace with a single text layer. `show_cif` still uses deprecated `size=` in
-   geom_step (should be `linewidth=`, as show_surv already does).
+1. ~~Dedupe show_surv/show_cif~~ **DONE 2026-07-05** (uncommitted at time of writing):
+   the duplicated p-value-position chains and fill/color switch blocks are replaced by
+   internal helpers in R/event_time_helpers.R (`pvalue_npc_position`, `annotate_pvalue`,
+   `event_time_color_scales`); event_time_desp.R shrank ~190 lines. Verified against a
+   pre-refactor baseline (`dev-tests/test_show_refactor.R`, 26 checks: p-value grob
+   coordinates for all positions, palette colors for all 4 schemes in both functions;
+   baseline stored in dev-tests/show_baseline.rds) plus a visual render.
+2. ~~add_atrisk rewrite + show_cif linewidth~~ **DONE 2026-07-05** (uncommitted at
+   time of writing): the at-risk table is now one vectorized textGrob per table
+   column (1 + n_breaks layers instead of one per cell), with y positions in
+   **text-line units below the panel bottom** so the gap to the figure no longer
+   grows with figure size (it was -0.225 x panel height before; per user request the
+   spacing is per user spec, svglite-measured in the default theme: with >1 group
+   the "At-risk N:" header starts on the line right after the x-axis title (offset
+   2.23 lines below panel bottom; measured baseline gap 1.01 line); with a single
+   group it sits exactly one line of whitespace below the title (offset 3.06;
+   measured 1.00). Rows 1.2 lines apart; the label column ends 2 characters left of
+   the first time point (replacing the old 10-trailing-space padding, so ~70px left
+   margin suffices instead of 90+).
+   **Semantic change:** `atrisk_init_pos` is now "lines below panel bottom"
+   (positive, default 4.5), no longer a data-coordinate y. Panel ranges are
+   untouched (annotation_custom does not train scales; invariance checks in
+   dev-tests/test_extract_atrisk.R). show_cif geom_step now uses `linewidth=`
+   (deprecation warning gone). Visual renders of show_surv and stratified show_cif
+   verified at two figure sizes.
 3. Decide fate of event_time_desp_revised.R (show_surv_revised, show_cif_revised,
    construct_cmprisk_var_revised — unexported near-duplicates of the production fns).
 4. Remove R/to_be_delete.R (top-level code breaks R CMD build and blocks roxygen);

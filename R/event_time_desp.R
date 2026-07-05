@@ -235,12 +235,7 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
   }
 
   #---- get parameters required for where to include the at-risk table ----#
-  # atrisk_init_pos<- -0.25 * max(diff(layer_scales(p)$y$range$range),
-  #                            diff(p$coordinates$limits$y))
-  atrisk_init_pos<- if (is.null(atrisk_init_pos)) {
-    -0.225 * max(diff(layer_scales(p)$y$range$range),
-                 diff(p$coordinates$limits$y))
-  } else atrisk_init_pos
+  atrisk_row_inc<- 1.2 # lines between at-risk rows
 
   # I need to calculate the number of at-risk at the x_break
   x_break     <- if (is.null(x_break)) {
@@ -254,95 +249,46 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
 
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
   nstrata <- ncol(risk_tbl)-1
-  # as_tibble(risk_tbl)
 
-  # to include the at-risk table in the existing figure, I specified the location
-  # (x- and y-position) for the "At-risk N:" label and for each cell entry of the
-  #  at-risk table by creating separate textGrob object.
+  # header position in text lines below the panel bottom (device-independent).
+  # svglite measurement (default theme): the x-axis tick labels + title occupy the
+  # first 2.06 lines, and text is 11/13.2 = 0.83 line tall. With >1 group the header
+  # starts on the line right after the axis title (2.06 + 0.17); with a single group
+  # it sits exactly one full line of whitespace below it (2.06 + 1)
+  if (is.null(atrisk_init_pos)) atrisk_init_pos<- if (nstrata> 1) 2.23 else 3.06
 
-  # Step 1: add a bold 'At-risk N:' label at x= 0 and y= atrisk_init_pos
-  out <- p + annotation_custom(
-    grob = textGrob(label= format("At-risk N:", width = 20),
-                    vjust= 1, hjust = 1,
-                    gp = gpar(fontfamily= font_family,
-                              fontsize  = font_size,
-                              fontface  = "bold")),
-    ymin = atrisk_init_pos,      # Vertical position of the textGrob
-    ymax = atrisk_init_pos,
-    xmin = 0,         # Note: The grobs are positioned outside the plot area
-    xmax = 0)
+  strata_col<- unique(layer_data(p)$colour)
+  strata_col<- if (nstrata==1) "black" else if (length(strata_col)< nstrata) rep_len(strata_col, nstrata) else strata_col
 
+  # where there are no strata, the numbers at-risk are displayed at the same level as
+  # 'At-risk N:'; otherwise each stratum gets its own row below it
+  row_lines<- if (nstrata==1) atrisk_init_pos else atrisk_init_pos + seq_len(nstrata)*atrisk_row_inc
 
-  # where there are no strata, ncol(risk_tbl)= 2; the number at-risk is displayed at the same level as 'At-risk N:'
-  # otherwise, ncol(risk_tbl)>2, the number of at-risk is displayed below 'At-risk N:'
-  if (nstrata==1) {
-    # no strata #
-    for (i in seq_along(risk_tbl$time))  {
-      out<- out + annotation_custom(
-        grob = textGrob(label = formatC(risk_tbl[i, 2],
-                                        digits = 0,
-                                        format = "d",
-                                        big.mark = ",",
-                                        flag = "#"),
-                        vjust= 1, hjust = 0.5,
-                        gp = gpar(fontfamily= font_family,
-                                  fontsize  = font_size)),
-        ymin = atrisk_init_pos,      # Vertical position of the textGrob
-        ymax = atrisk_init_pos,
-        xmin = risk_tbl$time[i],         # Note: The grobs are positioned outside the plot area
-        xmax = risk_tbl$time[i])
-    }
-  } else if (nstrata>1) {
-    # strata #
+  # one grob per table column: the x position comes from annotation_custom (data
+  # coordinates), the y positions are absolute text lines below the panel bottom
+  # so the spacing does not change with figure or panel size; the labels end
+  # 2 characters left of the first time point so they clear its centered counts
+  label_col<- textGrob(
+    label= c("At-risk N:",
+             if (nstrata> 1) paste0(colnames(risk_tbl)[-1], ":")),
+    x= unit(0, "npc") - unit(2, "char"),
+    y= unit(0, "npc") - unit(c(atrisk_init_pos, if (nstrata> 1) row_lines), "lines"),
+    hjust= 1, vjust= 1,
+    gp= gpar(fontfamily= font_family, fontsize= font_size,
+             col= c("black", if (nstrata> 1) strata_col),
+             fontface= c("bold", if (nstrata> 1) rep("plain", nstrata))))
 
-    # when there are strata, atrisk_y_inc indicates the relative position from the initial at-risk y pos.
-    # atrisk_y_inc<- -0.075 * diff(layer_scales(p)$y$range$range)
-    atrisk_y_inc<- -0.05 * max(diff(layer_scales(p)$y$range$range),
-                               diff(p$coordinates$limits$y))
+  out<- p + annotation_custom(label_col, xmin= 0, xmax= 0, ymin= -Inf, ymax= Inf)
 
-    # extract the color code used in the plot for different strata
-    strata_col<- unique(layer_data(p)$colour)
-    strata_lty<- unique(layer_data(p)$linetype)
-
-    strata_col<- if (length(strata_col)==1 & length(strata_col)< nstrata) rep(strata_col, nstrata) else strata_col
-    strata_lty<- if (length(strata_lty)==1 & length(strata_lty)< nstrata) rep(strata_lty, nstrata) else strata_lty
-
-    for (j in 2:ncol(risk_tbl)) {
-      tmp_y<- atrisk_init_pos + (j-1)*atrisk_y_inc
-
-      out <- out + annotation_custom(
-        grob = textGrob(label = format(paste0(colnames(risk_tbl)[j], ":"),
-                                       width = nchar(colnames(risk_tbl)[j])+ (20 - nchar("At-risk N:") + 1)),
-                        vjust= 1, hjust = 1,
-                        gp = gpar(fontfamily= font_family,
-                                  fontsize  = font_size,
-                                  col   = strata_col[j-1],
-                                  lty   = strata_lty[j-1])),
-        ymin = tmp_y,      # Vertical position of the textGrob
-        ymax = tmp_y,
-        xmin = 0,         # Note: The grobs are positioned outside the plot area
-        xmax = 0)
-
-      for (i in seq_along(risk_tbl$time)) {
-        tmp_x<- risk_tbl$time[i]
-
-        out <- out + annotation_custom(
-          grob = textGrob(label = formatC(risk_tbl[i, j],
-                                          digits = 0,
-                                          format = "d",
-                                          big.mark = ",",
-                                          flag = "#"),
-                          vjust= 1, hjust = 0.5,
-                          gp = gpar(fontfamily= font_family,
-                                    fontsize  = font_size,
-                                    col   = strata_col[j-1],
-                                    lty   = strata_lty[j-1])),
-          ymin = tmp_y,      # Vertical position of the textGrob
-          ymax = tmp_y,
-          xmin = tmp_x,      # Note: The grobs are positioned outside the plot area
-          xmax = tmp_x)
-      }
-    }
+  for (i in seq_along(risk_tbl$time)) {
+    count_col<- textGrob(
+      label= formatC(unlist(risk_tbl[i, -1]), digits= 0, format= "d", big.mark= ",", flag= "#"),
+      y= unit(0, "npc") - unit(row_lines, "lines"),
+      hjust= 0.5, vjust= 1,
+      gp= gpar(fontfamily= font_family, fontsize= font_size, col= strata_col))
+    out<- out + annotation_custom(count_col,
+                                  xmin= risk_tbl$time[i], xmax= risk_tbl$time[i],
+                                  ymin= -Inf, ymax= Inf)
   }
   out
 }
@@ -441,16 +387,7 @@ show_surv<- function(surv_obj,
   color_scheme <- match.arg(color_scheme)
   if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
 
-  fill_fun <- switch(color_scheme,
-                     'brewer' = quote(scale_fill_brewer(palette = "Set1")),
-                     'grey' = quote(scale_fill_grey(start= 0, end= 0.75)),
-                     'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
-                     'manual' = match.call(do.call, call('do.call', what= 'scale_fill_manual', args= color_list)))
-  color_fun<- switch(color_scheme,
-                     'brewer' = quote(scale_color_brewer(palette = "Set1")),
-                     'grey' = quote(scale_color_grey(start= 0, end= 0.75)),
-                     'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE)),
-                     'manual' = match.call(do.call, call('do.call', what= 'scale_color_manual', args= color_list)))
+  scale_pair<- event_time_color_scales(color_scheme, color_list)
 
   if (!plot_cdf & !is.null(y_lim)) {
     y_lim<- c(0, 1)
@@ -484,7 +421,7 @@ show_surv<- function(surv_obj,
     geom_step(data= plot_prob_d,
               aes(x= time, y= prob, group= strata, color= strata),
               linewidth = 1.1, show.legend = add_legend) +
-    eval(color_fun) +
+    scale_pair$colour +
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
                       #  expand= c(0.01, 0.005),
@@ -515,7 +452,7 @@ show_surv<- function(surv_obj,
       geom_ribbon(data= plot_ci_d,
                   aes(x= time, ymin= conf_low, ymax= conf_high, fill= strata),
                   alpha= .2, show.legend = FALSE) +
-      eval(fill_fun)
+      scale_pair$fill
   }
 
   out<- out + scale_y_continuous(name  = y_lab,
@@ -532,94 +469,7 @@ show_surv<- function(surv_obj,
     # pval<- format_pvalue(pval)
     pval<- ifelse(trimws(pval)=="<0.001", "Log-rank p< 0.001", paste0("Log-rank p= ", pval) )
 
-
-    y_bottom<- min(layer_scales(out)$y$range$range[1], out$coordinates$limits$y[1], na.rm= TRUE)
-    y_top   <- max(layer_scales(out)$y$range$range[2], out$coordinates$limits$y[2], na.rm= TRUE)
-    y_mid   <- (y_top + y_bottom)/2
-
-    tiny_nudge<- 0.01
-    pvalue_pos<- match.arg(pvalue_pos)
-    if (pvalue_pos %in% c("topleft")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 0
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottomleft")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 0
-      pvalue.vjust<- 0
-    } else if (pvalue_pos %in% c("topright")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 1
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottomright")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 1
-      pvalue.vjust<- 0
-    } else if (pvalue_pos %in% c("left")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 0.5
-      pvalue.hjust<- 0
-      pvalue.vjust<- 0.5
-    } else if (pvalue_pos %in% c("right")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 0.5
-      pvalue.hjust<- 1
-      pvalue.vjust<- 0.5
-    } else if (pvalue_pos %in% c("top")) {
-      # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0.5
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 0.5
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottom")) {
-      # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0.5
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 0.5
-      pvalue.vjust<- 0
-    } else {
-      pvalue.x<- NULL
-      pvalue.y<- NULL
-      pvalue.hjust<- NULL
-      pvalue.vjust<- NULL
-    }
-
-    out<- out +
-      annotation_custom(
-        grob = textGrob(label= pval,
-                        x = pvalue.x,
-                        hjust = pvalue.hjust,
-
-                        y = pvalue.y,
-                        vjust= pvalue.vjust,
-
-                        gp   = gpar(family  = "Inconsolata",
-                                    # fontface="bold.italic",
-                                    fontface = "italic",
-                                    # cex   = 1,
-                                    fontsize  = if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size)))
-    # ymin = pvalue.y,      # Vertical position of the textGrob
-    # ymax = pvalue.y,
-    # xmin = pvalue.x,
-    # xmax = pvalue.x)
+    out<- annotate_pvalue(out, pval, match.arg(pvalue_pos), plot_theme)
   }
 
   if (add_atrisk) out<- add_atrisk(out,
@@ -712,7 +562,7 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @param add_legend a logical parameter indicating whether legend should be added to the figure.
 #' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
 #' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
-#' @param atrisk_init_pos the location of the label "At-risk N:"
+#' @param atrisk_init_pos position of the "At-risk N:" header, in text lines below the panel bottom. Default: with more than one group the header starts on the line right after the x-axis title (2.23); with a single group it sits one full line of whitespace below it (3.06)
 #' @param plot_cdf Not used
 #' @return A ggplot object.
 #' @examples
@@ -822,16 +672,7 @@ show_cif<- function(surv_obj,
   color_scheme<- match.arg(color_scheme)
   if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
 
-  fill_fun <- switch(color_scheme,
-                     'brewer' = quote(scale_fill_brewer(palette = "Set1", guide_legend(title= ""))),
-                     'grey'   = quote(scale_fill_grey(start= 0, end= 0.65, guide_legend(title= ""))),
-                     'viridis'= quote(scale_fill_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE, guide_legend(title= ""))),
-                     'manual' = match.call(do.call, call('do.call', what= 'scale_fill_manual', args= color_list)))
-  color_fun<- switch(color_scheme,
-                     'brewer' = quote(scale_color_brewer(palette = "Set1", guide_legend(title= ""))),
-                     'grey'   = quote(scale_color_grey(start= 0, end= 0.65, guide_legend(title= ""))),
-                     'viridis'= quote(scale_color_viridis(option = "viridis", begin= .2, end= .85, discrete = TRUE, guide_legend(title= ""))),
-                     'manual' = match.call(do.call, call('do.call', what= 'scale_color_manual', args= color_list)))
+  scale_pair<- event_time_color_scales(color_scheme, color_list, grey_end = 0.65, blank_guide_title = TRUE)
 
   # x_lab<- if (is.null(x_lab)) "Time" else x_lab
   # y_lab<- if (is.null(y_lab)) "Proportion of subjects" else y_lab
@@ -843,20 +684,20 @@ show_cif<- function(surv_obj,
     out +
       geom_step(data= plot_prob_d,
                 aes(x= time, y= prob, group= state_label, color= state_label),
-                size= 1.1, show.legend = add_legend)
+                linewidth= 1.1, show.legend = add_legend)
   } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
     out +
       geom_step(data= plot_prob_d,
                 aes(x= time, y= prob, group= strata, color= strata),
-                size= 1.1, show.legend = add_legend)
+                linewidth= 1.1, show.legend = add_legend)
   } else {
     out +
       geom_step(data= plot_prob_d,
                 aes(x= time, y= prob, group= state_strata, color= state_strata),
-                size= 1.1, show.legend = add_legend)
+                linewidth= 1.1, show.legend = add_legend)
   }
   out<- out +
-    eval(color_fun) +
+    scale_pair$colour +
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
                        expand= c(0.01, 0.005),
@@ -913,7 +754,7 @@ show_cif<- function(surv_obj,
 
     }
 
-    out<- out + eval(fill_fun)
+    out<- out + scale_pair$fill
 
   }
 
@@ -922,89 +763,7 @@ show_cif<- function(surv_obj,
       format_pvalue()
     pval<- ifelse(trimws(pval)=="<0.001", "Gray's p< 0.001", paste0("Gray's p= ", pval) )
 
-    tiny_nudge<- 0.01
-    pvalue_pos<- match.arg(pvalue_pos)
-    if (pvalue_pos %in% c("topleft")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 0
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottomleft")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 0
-      pvalue.vjust<- 0
-    } else if (pvalue_pos %in% c("topright")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 1
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottomright")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 1
-      pvalue.vjust<- 0
-    } else if (pvalue_pos %in% c("left")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[1]
-      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 0 + tiny_nudge
-      pvalue.y<- 0.5
-      pvalue.hjust<- 0
-      pvalue.vjust<- 0.5
-    } else if (pvalue_pos %in% c("right")) {
-      # pvalue.x<- layer_scales(out)$x$range$range[2]
-      # pvalue.y<- y_mid #mean(layer_scales(out)$y$range$range)
-      pvalue.x<- 1 - tiny_nudge
-      pvalue.y<- 0.5
-      pvalue.hjust<- 1
-      pvalue.vjust<- 0.5
-    } else if (pvalue_pos %in% c("top")) {
-      # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- y_top #layer_scales(out)$y$range$range[2]
-      pvalue.x<- 0.5
-      pvalue.y<- 1 - tiny_nudge
-      pvalue.hjust<- 0.5
-      pvalue.vjust<- 1
-    } else if (pvalue_pos %in% c("bottom")) {
-      # pvalue.x<- mean(layer_scales(out)$x$range$range)
-      # pvalue.y<- y_bottom #layer_scales(out)$y$range$range[1]
-      pvalue.x<- 0.5
-      pvalue.y<- 0 + tiny_nudge
-      pvalue.hjust<- 0.5
-      pvalue.vjust<- 0
-    } else {
-      pvalue.x<- NULL
-      pvalue.y<- NULL
-      pvalue.hjust<- NULL
-      pvalue.vjust<- NULL
-    }
-
-    out<- out +
-      annotation_custom(
-        grob = textGrob(label= pval,
-                        x = pvalue.x,
-                        hjust = pvalue.hjust,
-
-                        y = pvalue.y,
-                        vjust= pvalue.vjust,
-
-                        gp   = gpar(family  = "Inconsolata",
-                                    # fontface="bold.italic",
-                                    fontface="italic",
-                                    # cex   = 1,
-                                    fontsize  = if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size)))
-        # ymin = pvalue.y,      # Vertical position of the textGrob
-        # ymax = pvalue.y,
-        # xmin = pvalue.x,
-        # xmax = pvalue.x)
+    out<- annotate_pvalue(out, pval, match.arg(pvalue_pos), plot_theme)
   }
 
   if (add_atrisk) out<- add_atrisk(out,
