@@ -54,11 +54,11 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
         dimnames = list(time.list, strata_lab)
       )
 
-    atRiskPts <- atRiskPts %>%
-      dplyr::as_tibble() %>%
-      dplyr::mutate_all(~ as.integer(replace(., is.na(.), 0))) %>%
-      dplyr::mutate(time = time.list) %>%
-      tidyr::pivot_longer(cols = !time, names_to = "strata", cols_vary = "slowest")
+    # wide, plain data.frame (time + one integer column per stratum) — the shape
+    # add_atrisk() and show_surv_revised() consume
+    atRiskPts <- replace(atRiskPts, is.na(atRiskPts), 0)
+    storage.mode(atRiskPts) <- "integer"
+    atRiskPts <- data.frame(time = time.list, atRiskPts, check.names = FALSE, row.names = NULL)
   } else {
     # no strata - single group
     x <- data.frame(
@@ -69,7 +69,7 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
 
     atRisk <- with(x, approxfun(x = time, y = n.risk, method = "constant", rule = 2:1, f = 1))
     atRiskPts <- atRisk(time.list)
-    atRiskPts <- dplyr::tibble(
+    atRiskPts <- data.frame(
       time = time.list,
       Overall = as.integer(replace(atRiskPts, is.na(atRiskPts), 0))
     )
