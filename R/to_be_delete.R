@@ -56,15 +56,21 @@ fit<- estimate_km(
    evt_time = evt_time,
    evt = dth
  )
-extract_atrisk(fit)
 surv_mat<- prepare_survfit(fit)
+risk_tbl <- extract_atrisk(fit, time.list = times)
+plot_cdf <- FALSE
+add_legend <- TRUE
+
+
+
+
 
 out + if (!is.null(y_lim)) coord_cartesian(ylim = y_lim, clip = "on") else coord_cartesian(clip = "on")
 
 
 
 
-xx <- ggplot(data = risk_tbl, aes(x = time, y = strata, label = value, color = strata)) +
+xx1 <- ggplot(data = risk_tbl, aes(x = time, y = strata, label = value, color = strata)) +
   geom_text(show.legend = FALSE, hjust = 0.5, vjust = 0) +
   scale_x_continuous(
     name = NULL,
@@ -90,13 +96,22 @@ xx <- ggplot(data = risk_tbl, aes(x = time, y = strata, label = value, color = s
     legend.position = "none"
   )
 
-out/xx
+out/xx1
 out + annotation_custom(
-  grob = ggplotGrob(xx),
+  grob = ggplotGrob(xx1),
   xmin = -6, xmax = 206,
   ymin = -0.1, ymax = -0.25
 ) +
   theme(plot.margin = margin(t = 5, r = 5, b = 200, l = 5))
+
+plot_grid(out, xx1, ncol = 1, heights = c(0.8, 0.2))
+
+xx2<- align_plots(out, xx1, align = "v", axis = "l")
+ggdraw(xx[[2]])
+
+
+
+
 
 fit <- estimate_cif(
    df = xx,
