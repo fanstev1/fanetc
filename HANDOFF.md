@@ -1,4 +1,4 @@
-# Hand-off note — 2026-07-05
+# Hand-off note — 2026-07-06
 
 Branch: `fanetc_dev` (GitHub: fanstev1/fanetc). Everything is committed and pushed;
 working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
@@ -55,18 +55,34 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   add_atrisk warns and falls back to the default when given an old-style negative
   data-coordinate `atrisk_init_pos`.
 
+## Docs + DESCRIPTION overhaul (2026-07-06)
+
+- Docs regenerated with roxygen2 7.3.3; man/ now matches the code (stale Rd gone,
+  fanetc-package.Rd added). Eight exports still have @export but no title/desc, so
+  no Rd is generated for them (show_surv, add_atrisk, prepare_survfit,
+  run_logrank_test, run_gray_test, summarize_mi_*, generate_mi_glm_termplot_df).
+- DESCRIPTION rewritten: License is now **MIT + file LICENSE** (chosen as the
+  conventional default — change if another license is preferred); unused deps
+  dropped (Hmisc, lubridate, cowplot, extrafont, gridExtra, tidyverse, splines);
+  everything real moved Depends -> Imports; broom (>= 1.0.5) + cardx declared in
+  Imports because table_one()'s add_p needs them at runtime; mice/mitools/sandwich
+  in Suggests (the MI helpers resolve them via require() + the user's search path,
+  as they always have); svglite in Suggests.
+- **Behavior change to know about:** `library(fanetc)` no longer attaches
+  magrittr/tidyverse/ggplot2/survival/etc. Scripts that relied on that side effect
+  must library() those packages themselves. Package internals are covered by
+  namespace imports (R/fanetc-package.R) — verified by a clean-session smoke test
+  of all 15 major code paths with nothing attached, plus all dev-tests/ suites.
+- run_logrank_test() fix that came out of this: it re-evaluates the stored survfit
+  call in the caller's frame, so `survdiff`/`Surv` are now namespace-qualified in
+  the rewritten call (event_time_desp.R ~line 358).
+
 ## Next steps (priority order)
 
-1. Regenerate docs with `roxygen2::roxygenise()` — now unblocked (to_be_delete.R is
-   gone); table_one.Rd, construct_*.Rd, show_cif.Rd etc. are stale; RoxygenNote
-   7.1.1 vs installed 7.3.3. Watch the generated NAMESPACE: @importFrom tags
-   reference dplyr/tidyselect which are not declared in DESCRIPTION.
-2. DESCRIPTION hygiene: License placeholder, move Depends -> Imports (add svglite to
-   Suggests if the SVG-measure workflow should ship).
-3. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
+1. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
    unverified metrics (line counts, performance table) — trim or rewrite.
-4. Longer term: convert dev-tests/ into a proper testthat suite.
-5. Smaller review findings not yet addressed: show_surv silently resets user-supplied
+2. Longer term: convert dev-tests/ into a proper testthat suite.
+3. Smaller review findings not yet addressed: show_surv silently resets user-supplied
    `y_lim` to c(0,1); `grepl("0", state)` in prepare_survfit would misclassify a state
    named "10"; show_cif @param docs are copy-paste errors (partially fixed).
 

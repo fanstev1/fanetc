@@ -356,7 +356,11 @@ estimate_km<- function(df, evt_time, evt, group, ci_transformation = "log-log", 
 run_logrank_test<- function(surv_obj) {
 
   tmp<- surv_obj$call
-  tmp[[1]]<- as.name("survdiff")
+  # namespace the survival symbols: the call is evaluated in the caller's
+  # frame, where survival may not be attached now that it is only an import
+  tmp[[1]]<- quote(survival::survdiff)
+  if (is.call(tmp[[2]]) && identical(tmp[[2]][[2]][[1]], as.name("Surv")))
+    tmp[[2]][[2]][[1]]<- quote(survival::Surv)
   tmp$rho<- 0
   tmp$conf.type<- NULL
   test<- eval(tmp, parent.frame())

@@ -4,7 +4,7 @@
 \alias{extract_atrisk}
 \title{extract_atrisk}
 \usage{
-extract_atrisk(fit, time.list, time.scale = 1)
+extract_atrisk(fit, time.list = NULL, time.scale = 1)
 }
 \arguments{
 \item{fit}{a survfit object}

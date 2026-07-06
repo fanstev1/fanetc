@@ -7,8 +7,10 @@
 show_cif(
   surv_obj,
   evt_type = 1,
-  evt_label = function(x) {     recode_factor(x, `1` = "Event", `2` =
-    "Competing event", .default = "Event free") },
+  evt_label = function(x) {
+     recode_factor(x, `1` = "Event", `2` = "Competing event",
+    .default = "Event free")
+ },
   add_ci = TRUE,
   add_atrisk = TRUE,
   add_legend = FALSE,
@@ -25,7 +27,8 @@ show_cif(
   y_break = NULL,
   color_scheme = c("brewer", "grey", "viridis", "manual"),
   color_list = NULL,
-  plot_cdf = FALSE
+  plot_cdf = FALSE,
+  print_fig = TRUE
 )
 }
 \arguments{
@@ -38,6 +41,8 @@ show_cif(
 \item{add_legend}{a logical parameter indicating whether legend should be added to the figure.}
 
 \item{add_pvalue}{a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.}
+
+\item{atrisk_init_pos}{position of the "At-risk N:" header, in text lines below the panel bottom. Default: with more than one group the header starts on the line right after the x-axis title (2.23); with a single group it sits one full line of whitespace below it (3.06)}
 
 \item{pvalue_pos}{a character parameter indicating where the p-value should be added to the plot.}
 

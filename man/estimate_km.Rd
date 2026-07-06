@@ -4,7 +4,7 @@
 \alias{estimate_km}
 \title{estimate_km}
 \usage{
-estimate_km(df, evt_time, evt, group, ...)
+estimate_km(df, evt_time, evt, group, ci_transformation = "log-log", ...)
 }
 \description{
 estimate_km
