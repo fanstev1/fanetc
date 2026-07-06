@@ -39,21 +39,34 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   For spacing work: render with svglite and read the <text> x/y coordinates
   (see dev-tests/test_show_refactor.R and the session notes) instead of eyeballing.
 
+## Folder cleanup + backward-compat audit (2026-07-06, uncommitted at time of writing)
+
+- Deleted R/event_time_desp_revised.R (unexported *_revised duplicates, obsolete now
+  that the production functions are fixed) and R/to_be_delete.R (scratch; top-level
+  code broke R CMD build). R/ is now 7 files, ~2000 lines.
+- Stripped ~200 lines of dead commented-out code (old inline MI blocks in
+  fan_util_fun.R, abandoned alternatives in event_time_desp.R).
+- **Backward-compat audit** (`dev-tests/test_api_compat.R`): all 27 NAMESPACE exports
+  are defined and every argument name from the last-good commit `7ab169b` is still
+  accepted, with positional order preserved. Fixes made during the audit:
+  construct_cmprisk_var restored the old positional layout
+  `(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname, append, ..., varname)`
+  (the `..., varname` layout came from the corrupted commits nobody could have run);
+  add_atrisk warns and falls back to the default when given an old-style negative
+  data-coordinate `atrisk_init_pos`.
+
 ## Next steps (priority order)
 
-1. Decide fate of event_time_desp_revised.R (show_surv_revised, show_cif_revised,
-   construct_cmprisk_var_revised — unexported near-duplicates of the production
-   functions; the tableGrob at-risk approach there may be obsolete now that
-   add_atrisk is fixed and line-calibrated).
-2. Remove R/to_be_delete.R (top-level code breaks R CMD build and blocks roxygen);
-   then regenerate docs with `roxygen2::roxygenise()` — table_one.Rd, construct_*.Rd,
-   show_cif.Rd etc. are stale; RoxygenNote 7.1.1 vs installed 7.3.3.
-3. DESCRIPTION hygiene: License placeholder, move Depends -> Imports (add svglite to
+1. Regenerate docs with `roxygen2::roxygenise()` — now unblocked (to_be_delete.R is
+   gone); table_one.Rd, construct_*.Rd, show_cif.Rd etc. are stale; RoxygenNote
+   7.1.1 vs installed 7.3.3. Watch the generated NAMESPACE: @importFrom tags
+   reference dplyr/tidyselect which are not declared in DESCRIPTION.
+2. DESCRIPTION hygiene: License placeholder, move Depends -> Imports (add svglite to
    Suggests if the SVG-measure workflow should ship).
-4. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
+3. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
    unverified metrics (line counts, performance table) — trim or rewrite.
-5. Longer term: convert dev-tests/ into a proper testthat suite.
-6. Smaller review findings not yet addressed: show_surv silently resets user-supplied
+4. Longer term: convert dev-tests/ into a proper testthat suite.
+5. Smaller review findings not yet addressed: show_surv silently resets user-supplied
    `y_lim` to c(0,1); `grepl("0", state)` in prepare_survfit would misclassify a state
    named "10"; show_cif @param docs are copy-paste errors (partially fixed).
 

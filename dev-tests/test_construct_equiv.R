@@ -85,6 +85,9 @@ check("cmprisk: varname (new arg name) matches old cmprisk_varname",
 check("cmprisk: append = TRUE",
       quiet(old_cmp(df, patid, idx_dt, evt_dt, end_dt, append = TRUE, cmp1 = cmp1_dt)),
       quiet(construct_cmprisk_var(df, patid, idx_dt, evt_dt, end_dt, append = TRUE, cmp1 = cmp1_dt)))
+check("cmprisk: OLD POSITIONAL call (cmprisk_varname & append as args 6-7)",
+      quiet(old_cmp(df, patid, idx_dt, evt_dt, end_dt, c("ftime", "fstatus"), TRUE, cmp1 = cmp1_dt)),
+      quiet(construct_cmprisk_var(df, patid, idx_dt, evt_dt, end_dt, c("ftime", "fstatus"), TRUE, cmp1 = cmp1_dt)))
 # Old fn has a bug with 0 competing events (paste0 zero-length recycling makes a
 # phantom "cmp_evt_" level; censored subjects become evt = NA). Assert the NEW
 # behavior is correct instead: matches old everywhere except censored get evt = 0.

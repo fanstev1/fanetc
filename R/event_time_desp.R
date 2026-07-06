@@ -55,7 +55,7 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
       )
 
     # wide, plain data.frame (time + one integer column per stratum) — the shape
-    # add_atrisk() and show_surv_revised() consume
+    # add_atrisk() consumes
     atRiskPts <- replace(atRiskPts, is.na(atRiskPts), 0)
     storage.mode(atRiskPts) <- "integer"
     atRiskPts <- data.frame(time = time.list, atRiskPts, check.names = FALSE, row.names = NULL)
@@ -236,6 +236,14 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
 
   #---- get parameters required for where to include the at-risk table ----#
   atrisk_row_inc<- 1.2 # lines between at-risk rows
+
+  # backward compatibility: atrisk_init_pos used to be a (negative) y data
+  # coordinate; it is now the number of text lines below the panel bottom
+  if (!is.null(atrisk_init_pos) && atrisk_init_pos < 0) {
+    warning("atrisk_init_pos is now the number of text lines below the panel bottom ",
+            "(positive; e.g. 3). Ignoring the old-style negative value and using the default.")
+    atrisk_init_pos<- NULL
+  }
 
   # I need to calculate the number of at-risk at the x_break
   x_break     <- if (is.null(x_break)) {
@@ -440,14 +448,6 @@ show_surv<- function(surv_obj,
                conf_low = conf_high)
     }
 
-    # if (y_lim[2]< 1) {
-    #   plot_ci_d<- plot_ci_d %>%
-    #     filter(conf_low <= y_lim[2],
-    #            conf_high>= y_lim[1]) %>%
-    #     mutate(conf_high= replace(conf_high, conf_high> y_lim[2], y_lim[2]),
-    #            conf_low = replace(conf_low, conf_low< y_lim[1], y_lim[1]))
-    # }
-
     out<- out +
       geom_ribbon(data= plot_ci_d,
                   aes(x= time, ymin= conf_low, ymax= conf_high, fill= strata),
@@ -460,7 +460,6 @@ show_surv<- function(surv_obj,
                                  expand= c(0.005, 0),
                                  labels= function(x) scales::percent(x, accuracy = 1))
 
-  # out<- if (!is.null(y_lim)) out + coord_cartesian(ylim = y_lim, clip = "on") else out
   out <- out + if (!is.null(y_lim)) coord_cartesian(ylim = y_lim, clip = "on") else coord_cartesian(clip = "on")
 
   if (add_pvalue) {
@@ -502,18 +501,6 @@ estimate_cif<- function(df, evt_time, evt, group, ...) {
   evt     <- enquo(evt)
   group   <- enquo(group)
 
-  # out<- if (quo_is_missing(group)) {
-  #   substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ 1, data= df, ...),
-  #              list(evt_time= quo_get_expr(evt_time),
-  #                   evt     = quo_get_expr(evt),
-  #                   df      = df))
-  # } else {
-  #   substitute(survfit(Surv(evt_time, evt, type= "mstate") ~ grp, data= df, ...),
-  #              list(evt_time= quo_get_expr(evt_time),
-  #                   evt     = quo_get_expr(evt),
-  #                   grp     = quo_get_expr(group),
-  #                   df      = df))
-  # }
   out<- if (quo_is_missing(group)) {
     substitute(survfit(Surv(evt_time, evt) ~ 1, data= df, ...),
                list(evt_time= quo_get_expr(evt_time),

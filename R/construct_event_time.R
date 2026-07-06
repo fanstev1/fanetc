@@ -110,11 +110,11 @@ construct_surv_var <- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname =
 #' @param idx_dt Name of index date column (unquoted) - time zero
 #' @param evt_dt Name of event date column (unquoted) - event of interest (missing if event doesn't occur)
 #' @param end_dt Name of end of follow-up date column (unquoted) (can be missing if event occurred)
-#' @param ... Additional competing event date columns (unquoted)
-#' @param varname Character vector of output variable names: c("time_var_name", "event_var_name")
-#'                If NULL, uses c("evt_time", "evt")
-#' @param cmprisk_varname Deprecated alias of `varname`, kept for backward compatibility
+#' @param cmprisk_varname Character vector of output variable names: c("time_var_name", "event_var_name")
+#'                        If NULL, uses c("evt_time", "evt")
 #' @param append Logical. If TRUE, appends to original data; if FALSE, returns only new variables
+#' @param ... Additional competing event date columns (unquoted), passed as name=column
+#' @param varname Alias of `cmprisk_varname` (name introduced in a later revision; both are accepted)
 #'
 #' @return A data frame with patient ID and event time / event indicator variables
 #'
@@ -145,10 +145,10 @@ construct_cmprisk_var <- function(df,
                                   idx_dt,
                                   evt_dt,
                                   end_dt,
-                                  ...,
-                                  varname = NULL,
                                   cmprisk_varname = NULL,
-                                  append = FALSE) {
+                                  append = FALSE,
+                                  ...,
+                                  varname = NULL) {
 
   patid <- rlang::enquo(patid)
   idx_dt <- rlang::enquo(idx_dt)
