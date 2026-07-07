@@ -77,12 +77,34 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   call in the caller's frame, so `survdiff`/`Surv` are now namespace-qualified in
   the rewritten call (event_time_desp.R ~line 358).
 
+## table_one_paired() — designed, not yet implemented (2026-07-06)
+
+- New feature planned with the user: `table_one_paired(df, pair_id, group, ...)` for
+  paired/matched data (long format, pair-ID column, grouping variable with **exactly
+  2 levels** — 3-level support was considered and explicitly dropped during design).
+- Full spec: `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`. Key
+  decisions, all confirmed by the user: descriptives delegate to table_one()
+  (add_p = FALSE) with pair_id carried but not summarized; paired tests via a custom
+  add_p() test function (paired t / Wilcoxon signed-rank per continuous_stat;
+  mcnemar.test on the k×k pair table = McNemar/Bowker for categorical); descriptives
+  keep all rows, tests/SMD use per-variable complete pairs; add_stat() columns for
+  N pairs and SMD (smd::smd, 3 decimals) computed on the same complete pairs;
+  column order label | Overall | lvl1 | lvl2 | N pairs | SMD | p.
+- New code goes in a NEW file `R/desp_table_paired.R` (repo convention); tests in
+  `dev-tests/test_table_one_paired.R`; `smd` package to be added to Imports
+  (available on the Posit 2025-03-31 snapshot, not yet installed locally).
+- Status: spec written and committed, **user has not yet reviewed it**. Next step per
+  the brainstorming workflow: user reviews spec → superpowers:writing-plans skill for
+  the implementation plan → implement.
+
 ## Next steps (priority order)
 
-1. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
+1. table_one_paired(): user reviews the spec above, then implementation plan +
+   implementation.
+2. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
    unverified metrics (line counts, performance table) — trim or rewrite.
-2. Longer term: convert dev-tests/ into a proper testthat suite.
-3. Smaller review findings not yet addressed: show_surv silently resets user-supplied
+3. Longer term: convert dev-tests/ into a proper testthat suite.
+4. Smaller review findings not yet addressed: show_surv silently resets user-supplied
    `y_lim` to c(0,1); `grepl("0", state)` in prepare_survfit would misclassify a state
    named "10"; show_cif @param docs are copy-paste errors (partially fixed).
 
