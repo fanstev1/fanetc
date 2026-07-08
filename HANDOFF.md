@@ -77,30 +77,50 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   call in the caller's frame, so `survdiff`/`Surv` are now namespace-qualified in
   the rewritten call (event_time_desp.R ~line 358).
 
-## table_one_paired() — designed, not yet implemented (2026-07-06)
+## table_one_paired() — design FINALIZED, not yet implemented (2026-07-08)
 
-- New feature planned with the user: `table_one_paired(df, pair_id, group, ...)` for
-  paired/matched data (long format, pair-ID column, grouping variable with **exactly
-  2 levels** — 3-level support was considered and explicitly dropped during design).
-- Full spec: `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`. Key
-  decisions, all confirmed by the user: descriptives delegate to table_one()
-  (add_p = FALSE) with pair_id carried but not summarized; paired tests via a custom
-  add_p() test function (paired t / Wilcoxon signed-rank per continuous_stat;
-  mcnemar.test on the k×k pair table = McNemar/Bowker for categorical); descriptives
-  keep all rows, tests/SMD use per-variable complete pairs; add_stat() columns for
-  N pairs and SMD (smd::smd, 3 decimals) computed on the same complete pairs;
-  column order label | Overall | lvl1 | lvl2 | N pairs | SMD | p.
+- New feature designed with the user: `table_one_paired(df, pair_id, group, ...)` for
+  paired data (long format, pair-ID column, grouping variable with **exactly 2
+  levels** — 3-level support was considered and explicitly dropped during design).
+- **Full spec (authoritative, read it before implementing):**
+  `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`. The design went
+  through two rounds of external review by Codex (via the codex:codex-rescue agent;
+  needs `codex login`). Round 1 found two critical integration flaws, both resolved
+  by redesign; round 2 endorsed the result and its tightening items are folded in.
+- Key decisions, all confirmed by the user:
+  - Tests: paired t / Wilcoxon signed-rank per `continuous_stat`;
+    `stats::mcnemar.test` on the k×k pair table (McNemar/Bowker) for categorical.
+    Descriptives use all rows; tests/SMD use per-variable complete pairs; N-pairs
+    column reports the count.
+  - `pairing_method = c("repeated_measure", "matching")`: matching → marginal
+    smd::smd (pooled variance); repeated_measure → Cohen's d_z (within-pair SD) for
+    continuous, marginal SMD for categorical in both modes. Footnote states method
+    + reference level.
+  - `ref_group` argument: default first factor level / most-frequent for character
+    (first-observed tie-break) / sorted-first for logical-numeric; sets first group
+    column and SMD sign (non-reference minus reference).
+  - SMD digits: decimalplaces(x) with floor of 1 for continuous; 1 decimal for
+    categorical.
+  - **Integration mechanism (the critical fix):** do NOT use add_p()/add_stat()
+    custom functions — pair_id cannot ride inside tbl$inputs$data. Compute paired
+    stats directly from the validated input df and merge via modify_table_body()
+    keyed on variable + row_type == "label". table_one(add_p = FALSE) builds the
+    descriptive table and receives the data WITHOUT the pair_id column. Analysis
+    variable set = label rows of the returned table. Final layout via
+    modify_column_order(). Compact method-class p footnote.
+  - Missing group rows and NA/empty pair IDs dropped with messages (before the
+    duplicate-pair-member validation, which errors).
 - New code goes in a NEW file `R/desp_table_paired.R` (repo convention); tests in
-  `dev-tests/test_table_one_paired.R`; `smd` package to be added to Imports
-  (available on the Posit 2025-03-31 snapshot, not yet installed locally).
-- Status: spec written and committed, **user has not yet reviewed it**. Next step per
-  the brainstorming workflow: user reviews spec → superpowers:writing-plans skill for
-  the implementation plan → implement.
+  `dev-tests/test_table_one_paired.R` (17-item test plan in the spec); `smd` package
+  to be added to Imports (on the Posit 2025-03-31 snapshot, not yet installed
+  locally).
+- Status: spec finalized and user-reviewed. Next step per the brainstorming
+  workflow: superpowers:writing-plans skill for the implementation plan → implement.
 
 ## Next steps (priority order)
 
-1. table_one_paired(): user reviews the spec above, then implementation plan +
-   implementation.
+1. table_one_paired(): write the implementation plan (superpowers:writing-plans),
+   then implement per the spec.
 2. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
    unverified metrics (line counts, performance table) — trim or rewrite.
 3. Longer term: convert dev-tests/ into a proper testthat suite.
