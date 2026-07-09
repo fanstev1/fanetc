@@ -440,4 +440,26 @@ check("integration: datadic label for pair_id does not leak into the table", !("
 check("integration: datadic label for group does not leak into the table", !("VISIT LEAK" %in% labels_leak))
 check("integration: datadic label for a real variable still applies", "Age (years)" %in% labels_leak)
 
+# 3+ level categorical SMD must NOT be negated: smd::smd() returns a
+# gref-invariant, non-negative Mahalanobis distance for multi-category
+# factors, not a signed difference -- negating it (as continuous/binary
+# variables correctly are) would produce a meaningless negative value.
+set.seed(43)
+n_multi <- 40
+dsmd_multi <- data.frame(pid = rep(1:n_multi, each = 2), grp = rep(c("A", "B"), n_multi), cat3 = NA)
+dsmd_multi$grp <- factor(dsmd_multi$grp, levels = c("A", "B"))
+dsmd_multi$cat3[dsmd_multi$grp == "A"] <- sample(c("x", "y", "z"), n_multi, TRUE, prob = c(0.6, 0.3, 0.1))
+dsmd_multi$cat3[dsmd_multi$grp == "B"] <- sample(c("x", "y", "z"), n_multi, TRUE, prob = c(0.2, 0.3, 0.5))
+dsmd_multi$cat3 <- factor(dsmd_multi$cat3)
+smd_multi <- .paired_make_smd_fn(dsmd_multi, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "cat3", by = NULL)$smd
+wide_multi <- .paired_wide(dsmd_multi, "pid", "grp", "A", "B", "cat3")
+x_multi <- c(wide_multi$.ref, wide_multi$.other)
+g_multi <- factor(c(rep("A", nrow(wide_multi)), rep("B", nrow(wide_multi))), levels = c("A", "B"))
+expected_multi <- smd::smd(x = x_multi, g = g_multi, gref = 1L)$estimate[1]
+dec_multi <- 1L
+check("smd: 3-level categorical SMD is non-negative (gref-invariant Mahalanobis distance, not negated)",
+      !grepl("^-", smd_multi))
+check("smd: 3-level categorical SMD matches un-negated smd::smd() magnitude",
+      smd_multi == formatC(expected_multi, digits = dec_multi, format = "f"))
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
