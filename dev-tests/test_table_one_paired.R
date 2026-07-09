@@ -441,9 +441,11 @@ check("integration: datadic label for group does not leak into the table", !("VI
 check("integration: datadic label for a real variable still applies", "Age (years)" %in% labels_leak)
 
 # 3+ level categorical SMD must NOT be negated: smd::smd() returns a
-# gref-invariant, non-negative Mahalanobis distance for multi-category
-# factors, not a signed difference -- negating it (as continuous/binary
-# variables correctly are) would produce a meaningless negative value.
+# gref-invariant, non-negative Mahalanobis distance for factor/character x
+# (regardless of level count), not a signed difference -- negating it (as is
+# correctly done for numeric/logical variables) would produce a meaningless
+# negative value. See the 2-level factor test below for the corresponding
+# 2-level case (the distinguishing property is variable TYPE, not level count).
 set.seed(43)
 n_multi <- 40
 dsmd_multi <- data.frame(pid = rep(1:n_multi, each = 2), grp = rep(c("A", "B"), n_multi), cat3 = NA)
@@ -461,5 +463,33 @@ check("smd: 3-level categorical SMD is non-negative (gref-invariant Mahalanobis 
       !grepl("^-", smd_multi))
 check("smd: 3-level categorical SMD matches un-negated smd::smd() magnitude",
       smd_multi == formatC(expected_multi, digits = dec_multi, format = "f"))
+
+# 2-level factor/character SMD must ALSO not be negated: smd::smd() returns a
+# gref-invariant, non-negative Mahalanobis distance for factor/character x of
+# ANY level count (including 2), not just 3+ -- only numeric and logical x get
+# a signed estimate from smd::smd(). This is the gap a level-count-based guard
+# would miss (a 2-level factor is not "multi-level" but still needs this).
+set.seed(47)
+n_2f <- 40
+dsmd_2f <- data.frame(pid = rep(1:n_2f, each = 2), grp = rep(c("A", "B"), n_2f), sex = NA)
+dsmd_2f$grp <- factor(dsmd_2f$grp, levels = c("A", "B"))
+dsmd_2f$sex[dsmd_2f$grp == "A"] <- sample(c("F", "M"), n_2f, TRUE, prob = c(0.2, 0.8))
+dsmd_2f$sex[dsmd_2f$grp == "B"] <- sample(c("F", "M"), n_2f, TRUE, prob = c(0.8, 0.2))
+dsmd_2f$sex <- factor(dsmd_2f$sex, levels = c("F", "M"))
+smd_2f <- .paired_make_smd_fn(dsmd_2f, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "sex", by = NULL)$smd
+wide_2f <- .paired_wide(dsmd_2f, "pid", "grp", "A", "B", "sex")
+x_2f <- c(wide_2f$.ref, wide_2f$.other)
+g_2f <- factor(c(rep("A", nrow(wide_2f)), rep("B", nrow(wide_2f))), levels = c("A", "B"))
+expected_2f <- smd::smd(x = x_2f, g = g_2f, gref = 1L)$estimate[1]
+check("smd: 2-level FACTOR categorical SMD is non-negative (not negated, unlike logical)",
+      !grepl("^-", smd_2f))
+check("smd: 2-level factor SMD matches un-negated smd::smd() magnitude",
+      smd_2f == formatC(expected_2f, digits = 1L, format = "f"))
+
+# Confirm the LOGICAL case is still correctly negated (regression guard: logical
+# must stay signed, unlike factor/character of the same 2-level cardinality)
+logical_sign_check <- sign_cat_match  # from the existing logical sign test earlier in this file
+check("smd: 2-level LOGICAL categorical is still negated (positive sign confirmed above, regression guard)",
+      !grepl("^-", logical_sign_check))
 
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }

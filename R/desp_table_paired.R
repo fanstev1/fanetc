@@ -143,15 +143,17 @@
         x <- c(wide$.ref, wide$.other)
         g <- factor(c(rep(ref_level, nrow(wide)), rep(other_level, nrow(wide))), levels = c(ref_level, other_level))
         res <- tryCatch(smd::smd(x = x, g = g, gref = 1L), error = function(e) NULL)
-        # smd::smd()'s sign convention for a SIGNED estimate (continuous, or a
-        # binary/logical 2-level categorical) is reference MINUS term/other -- the
-        # opposite of this design's "non-reference minus reference" convention --
-        # so negate for those cases. For 3+ level factors, smd::smd() returns the
-        # Yang-Dalton Mahalanobis distance, which is gref-invariant and always
-        # non-negative (verified empirically: identical under gref=1 and gref=2);
-        # negating it would produce a spurious negative "SMD," so it is left as-is.
-        multi_level_cat <- !is_cont && length(unique(as.character(x))) > 2L
-        if (is.null(res)) NA_real_ else if (multi_level_cat) res$estimate[1] else -res$estimate[1]
+        # smd::smd() returns a SIGNED estimate ("reference minus other", the
+        # opposite of this design's "non-reference minus reference" convention)
+        # only for numeric (continuous) and logical x -- logical is coerced to
+        # 0/1 internally. For factor/character x of ANY level count (including
+        # 2 levels), smd::smd() instead returns the Yang-Dalton Mahalanobis
+        # distance, which is gref-invariant and always non-negative (verified
+        # empirically: identical estimate under gref=1 and gref=2 for both
+        # 2-level and 3+-level factor/character variables) -- negating that
+        # would produce a spurious negative "SMD," so it is left as-is.
+        signed_estimate <- is_cont || is.logical(x_var)
+        if (is.null(res)) NA_real_ else if (signed_estimate) -res$estimate[1] else res$estimate[1]
       }
     }
 
