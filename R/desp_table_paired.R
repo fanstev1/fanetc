@@ -154,3 +154,193 @@
     dplyr::tibble(smd = if (is.na(val)) "---" else formatC(val, digits = dec, format = "f"))
   }
 }
+
+#' @title table_one_paired
+#'
+#' @description
+#' Descriptive table for paired/matched data: a companion to \code{table_one()} for
+#' data in long format with a pair-ID column and a grouping variable with exactly
+#' 2 observed levels (e.g. before/after measurements, or 1:1 matched cohorts).
+#' Adds paired-appropriate p-values, standardized mean differences (SMD), and the
+#' number of complete pairs used for each variable.
+#'
+#' @details
+#' Descriptive cells are produced by delegating to \code{table_one()} (which the
+#' \code{pair_id} column is never passed to, so it can never be summarized as a
+#' row). Paired statistics are computed directly from the validated input data and
+#' attached with \code{gtsummary::add_stat()}/\code{gtsummary::add_p()}.
+#'
+#' **Paired significance tests** (pairwise-complete per variable):
+#' - Continuous: paired t-test (\code{continuous_stat = "meansd"}) or Wilcoxon
+#'   signed-rank test (\code{"mediqr"}).
+#' - Categorical (logical or factor, any number of categories): McNemar's test
+#'   (2 categories) or the McNemar-Bowker symmetry test (more than 2 categories),
+#'   via \code{stats::mcnemar.test()} on the union-of-levels square table.
+#'
+#' **SMD**, selected by \code{pairing_method}:
+#' - \code{"matching"}: marginal (pooled-variance) SMD via \code{smd::smd()} —
+#'   the conventional matched-cohort balance metric.
+#' - \code{"repeated_measure"}: Cohen's d_z (within-pair mean difference divided
+#'   by the within-pair SD of differences) for continuous variables; categorical
+#'   variables use the marginal SMD in both methods (no standard within-pair
+#'   categorical estimand exists).
+#'
+#' Both are computed on the same complete pairs the significance test used, with
+#' sign convention non-reference minus reference. Degenerate cases (zero complete
+#' pairs, zero-variance differences, all-concordant categorical tables) return
+#' \code{NA} (displayed as \code{"---"} for SMD, formatted by \code{pvalue_fun}
+#' for p-values) instead of erroring.
+#'
+#' @param df Dataframe in long format: one row per pair member.
+#' @param pair_id Column identifying the pair (unquoted). May be character,
+#'        factor, or numeric. Rows with a missing/empty pair ID are dropped.
+#' @param group Column identifying the pair member's arm/condition (unquoted).
+#'        Must have exactly 2 observed levels after missing-row drops.
+#' @param pairing_method One of "repeated_measure" or "matching"; selects the
+#'        SMD estimand (see Details). The significance tests are the same under
+#'        both.
+#' @param ref_group Reference group level (optional). Default: first factor
+#'        level if \code{group} is a factor; most frequent level (ties broken by
+#'        first-observed) if character; sorted-first if logical/numeric. Sets the
+#'        first group column and the SMD sign (non-reference minus reference).
+#' @param datadic Optional data dictionary with variable descriptions; see
+#'        \code{table_one()}.
+#' @param var_name Column of \code{datadic} holding variable names; see
+#'        \code{table_one()}.
+#' @param var_desp Column of \code{datadic} holding display labels; see
+#'        \code{table_one()}.
+#' @param include Vector of variable names to include (optional). Evaluated
+#'        against the original data; \code{pair_id} is dropped from the
+#'        selection if listed (with a message), \code{group} is always kept.
+#' @param missing Type of missing data display: "ifany" (default), "no", or
+#'        "always".
+#' @param missing_text Text to display for missing count. Default: "(Missing)".
+#' @param add_p Logical. Add paired p-values (default: TRUE).
+#' @param add_smd Logical. Add the SMD column (default: TRUE).
+#' @param add_n_pairs Logical. Add the N-pairs column (default: TRUE).
+#' @param add_overall Logical. Add an overall column (default: TRUE).
+#' @param sort_by_p Logical. Sort rows by p-value; ignored when
+#'        \code{add_p = FALSE} (default: FALSE).
+#' @param continuous_stat One of "meansd" or "mediqr"; see \code{table_one()}.
+#' @param pvalue_fun Function to format p-values (default: \code{format_pvalue}).
+#'
+#' @return A tbl_summary object (gtsummary class).
+#'
+#' @examples
+#' library(gtsummary)
+#' set.seed(0)
+#' n <- 40
+#' df <- data.frame(
+#'   pid = rep(1:n, each = 2),
+#'   visit = rep(c("Baseline", "Followup"), n),
+#'   age = rnorm(2 * n, 55, 8)
+#' )
+#' table_one_paired(df, pair_id = pid, group = visit)
+#'
+#' @export
+table_one_paired <- function(df, pair_id, group,
+                              pairing_method = c("repeated_measure", "matching"),
+                              ref_group = NULL,
+                              datadic = NULL, var_name, var_desp, include,
+                              missing = "ifany", missing_text = "(Missing)",
+                              add_p = TRUE, add_smd = TRUE, add_n_pairs = TRUE,
+                              add_overall = TRUE, sort_by_p = FALSE,
+                              continuous_stat = c("meansd", "mediqr"),
+                              pvalue_fun = format_pvalue) {
+
+  pairing_method  <- match.arg(pairing_method)
+  continuous_stat <- match.arg(continuous_stat)
+
+  pair_id_q  <- rlang::enquo(pair_id)
+  group_q    <- rlang::enquo(group)
+  include_q  <- rlang::enquo(include)
+  var_name_q <- rlang::enquo(var_name)
+  var_desp_q <- rlang::enquo(var_desp)
+
+  pair_id_name <- rlang::as_name(pair_id_q)
+  group_name   <- rlang::as_name(group_q)
+
+  prep <- .paired_prepare_data(df, pair_id_name, group_name, ref_group)
+  data <- prep$data
+  ref_level   <- prep$ref_level
+  other_level <- prep$other_level
+
+  has_include <- !rlang::quo_is_missing(include_q)
+  if (has_include) {
+    include_loc   <- tidyselect::eval_select(include_q, df)
+    include_names <- names(df)[include_loc]
+    if (pair_id_name %in% include_names) {
+      message("`pair_id` column '", pair_id_name,
+              "' was listed in `include`; ignoring it (pair IDs are never summarized)")
+      include_names <- setdiff(include_names, pair_id_name)
+    }
+    include_names <- union(include_names, group_name)
+  } else {
+    include_names <- setdiff(names(data), pair_id_name)
+  }
+
+  if (length(setdiff(include_names, group_name)) == 0L) {
+    stop("`include` selects no variables to summarize after removing `pair_id` ",
+         "(only `group` remains). Include at least one real variable.")
+  }
+
+  desc_data <- data[, include_names, drop = FALSE]
+
+  te_call <- rlang::call2(
+    "table_one", quote(desc_data),
+    group = rlang::sym(group_name),
+    datadic = datadic,
+    missing = missing, missing_text = missing_text,
+    add_p = FALSE, add_overall = FALSE,
+    continuous_stat = continuous_stat
+  )
+  if (!rlang::quo_is_missing(var_name_q)) te_call$var_name <- rlang::quo_get_expr(var_name_q)
+  if (!rlang::quo_is_missing(var_desp_q)) te_call$var_desp <- rlang::quo_get_expr(var_desp_q)
+  tbl <- eval(te_call, envir = environment())
+
+  n_pairs_fn   <- .paired_make_n_pairs_fn(data, pair_id_name, group_name, ref_level, other_level)
+  smd_fn       <- .paired_make_smd_fn(data, pair_id_name, group_name, ref_level, other_level, pairing_method)
+  cont_test_fn <- .paired_make_cont_test_fn(data, pair_id_name, group_name, ref_level, other_level, continuous_stat)
+  cat_test_fn  <- .paired_make_cat_test_fn(data, pair_id_name, group_name, ref_level, other_level)
+
+  if (add_overall) tbl <- gtsummary::add_overall(tbl)
+
+  if (add_n_pairs) {
+    tbl <- gtsummary::add_stat(tbl, fns = gtsummary::everything() ~ n_pairs_fn)
+    tbl <- gtsummary::modify_header(tbl, n_pairs ~ "**N pairs**")
+  }
+
+  if (add_smd) {
+    tbl <- gtsummary::add_stat(tbl, fns = gtsummary::everything() ~ smd_fn)
+    tbl <- gtsummary::modify_header(tbl, smd ~ "**SMD**")
+    smd_note <- if (pairing_method == "matching") {
+      paste0("SMD = standardized mean difference, ", other_level, " vs ", ref_level,
+             " (reference); pooled-variance (marginal) estimate on complete pairs (matched design).")
+    } else {
+      paste0("SMD = standardized mean difference, ", other_level, " vs ", ref_level,
+             " (reference), computed on complete pairs; within-pair SD denominator for ",
+             "continuous variables (repeated measures); categorical variables use the ",
+             "marginal (pooled-variance) estimate.")
+    }
+    tbl <- gtsummary::modify_footnote_header(tbl, footnote = smd_note, columns = "smd")
+  }
+
+  if (add_p) {
+    tbl <- gtsummary::add_p(
+      tbl,
+      test = list(gtsummary::all_continuous()  ~ cont_test_fn,
+                  gtsummary::all_categorical() ~ cat_test_fn),
+      pvalue_fun = pvalue_fun
+    )
+    p_note <- paste0(
+      "Continuous variables: ",
+      if (continuous_stat == "meansd") "paired t-test" else "Wilcoxon signed-rank test",
+      "; categorical variables: McNemar's test (2 categories) or McNemar-Bowker test ",
+      "(more than 2 categories). Tests use pairwise-complete pairs for each variable."
+    )
+    tbl <- gtsummary::modify_footnote_header(tbl, footnote = p_note, columns = "p.value")
+    if (sort_by_p) tbl <- gtsummary::sort_p(tbl)
+  }
+
+  tbl
+}

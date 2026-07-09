@@ -246,4 +246,39 @@ dsign_cat$flag[dsign_cat$grp == "B"] <- sample(c(TRUE, FALSE), n_cat, TRUE, prob
 sign_cat_match <- .paired_make_smd_fn(dsign_cat, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "flag", by = NULL)$smd
 check("smd: categorical other-minus-reference sign is positive when other prevalence > reference", !grepl("^-", sign_cat_match))
 
+## ---- table_one_paired(): plumbing ----
+
+set.seed(21)
+nn <- 25
+tdf <- data.frame(
+  pid = rep(1:nn, each = 2),
+  visit = rep(c("Baseline", "Followup"), nn),
+  age = NA_real_,
+  sex = factor(sample(c("F", "M"), 2 * nn, TRUE))
+)
+base_age <- rnorm(nn, 55, 8)
+tdf$age[tdf$visit == "Baseline"] <- base_age
+tdf$age[tdf$visit == "Followup"] <- base_age + rnorm(nn, 1, 3)
+
+res <- table_one_paired(tdf, pair_id = pid, group = visit)
+check("main: returns a tbl_summary/gtsummary object", inherits(res, "tbl_summary") && inherits(res, "gtsummary"))
+check("main: default column order is Overall, ref(Baseline), other(Followup), N pairs, SMD, p-value",
+      identical(tail(res$table_styling$header$column, 6), c("stat_0", "stat_1", "stat_2", "n_pairs", "smd", "p.value")))
+check("main: pair_id never appears as a table_body variable", !("pid" %in% res$table_body$variable))
+
+# include normalization: pair_id explicitly listed is dropped with a message, not an error
+res_inc <- suppressMessages(table_one_paired(tdf, pair_id = pid, group = visit, include = c(pid, age)))
+check("main: include=c(pid, age) drops pid, keeps age, no error", "age" %in% res_inc$table_body$variable)
+
+# var_name/var_desp forwarding to table_one() via datadic
+dic <- data.frame(nm = c("age", "sex"), lbl = c("Age (years)", "Sex"), stringsAsFactors = FALSE)
+res_dic <- table_one_paired(tdf, pair_id = pid, group = visit, datadic = dic, var_name = nm, var_desp = lbl)
+check("main: var_name/var_desp forwarded to table_one() datadic labels",
+      "Age (years)" %in% as_tibble(res_dic)[[1]])
+
+# add_* toggles
+res_off <- table_one_paired(tdf, pair_id = pid, group = visit, add_p = FALSE, add_smd = FALSE, add_n_pairs = FALSE, add_overall = FALSE)
+check("main: add_p/add_smd/add_n_pairs/add_overall = FALSE removes those columns",
+      !any(c("stat_0", "n_pairs", "smd", "p.value") %in% res_off$table_styling$header$column))
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
