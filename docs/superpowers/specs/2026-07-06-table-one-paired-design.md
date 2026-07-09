@@ -94,11 +94,13 @@ Performed in this order:
 | label | Overall | reference level | other level | N pairs | SMD | p-value |
 
 `add_overall`, `add_n_pairs`, `add_smd`, `add_p` each toggle their column.
-The final order is enforced explicitly with
-`gtsummary::modify_column_order()` after all columns are assembled (the
-assembly sequence alone does not guarantee it). N pairs, SMD, and p-value
-appear on the **variable label row only**; level rows and missing rows of
-categorical variables are blank in those columns.
+The final order is produced by call order alone — see the "Paired
+statistics: integration mechanism" section below for why (`gtsummary` 2.1.0
+has no `modify_column_order()`, and none is needed: `add_overall()` →
+`add_stat()` (N pairs) → `add_stat()` (SMD) → `add_p()`, in that order,
+already yields the correct layout). N pairs, SMD, and p-value appear on the
+**variable label row only**; level rows and missing rows of categorical
+variables are blank in those columns.
 
 ## Descriptive columns
 
