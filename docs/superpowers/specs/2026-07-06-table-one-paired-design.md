@@ -112,25 +112,62 @@ observations** in each group (incomplete pairs included).
 
 ## Paired statistics: integration mechanism
 
-The paired p-values, SMDs, and N-pairs counts are computed **directly from
-the validated input data frame** (which table_one_paired holds) and merged
-into the gtsummary object with `gtsummary::modify_table_body()`. The merge
-is keyed on `variable` **and `row_type == "label"`** (categorical variables
-have multiple body rows per variable; level and missing rows are explicitly
-left `NA`). The analysis variable set is taken from the label rows of the
-table returned by `table_one()` — i.e., only variables that survived
-table_one's preprocessing (which drops character and Date columns) get
-paired stats. Headers via `modify_header()`, p-value formatting by
-attaching `pvalue_fun` as the column's `fmt_fun`, footnotes via
-`modify_footnote()`.
+(Revised 2026-07-08: the originally planned `modify_table_body()` +
+`modify_column_order()` merge could not be implemented — `gtsummary`
+2.1.0, the version this package targets, has no `modify_column_order()`
+function. Verified by inspecting `getNamespaceExports("gtsummary")`. The
+mechanism below was prototyped end-to-end and confirmed working.)
 
-This deliberately avoids `add_p()`/`add_stat()` custom-function machinery:
-those only see the data stored inside the tbl_summary object, which cannot
-contain pair_id without either displaying it or patching
-`tbl$inputs$data` (fragile row-alignment surgery). Computing outside and
-merging by variable name has no such coupling. `sort_by_p = TRUE` then uses
-`gtsummary::sort_p()`, which operates on the `p.value` table-body column as
-usual.
+The paired p-values, SMDs, and N-pairs counts are attached with
+`gtsummary::add_p()` and `gtsummary::add_stat()`, using **custom functions
+that close over `table_one_paired()`'s local validated data frame** (the
+one with `pair_id` and the group/type-2-level structure already checked).
+gtsummary invokes each custom function once per variable with the
+signature `function(data, variable, by, ...)`; `data`/`by` are ignored, and
+`variable` (a string naming the column) is used to pull that column out of
+the closure-captured validated data frame — not out of `data`. This means
+`pair_id` never needs to be present in the tbl_summary object's own data,
+so it is never at risk of being displayed as a summary row, and no
+manual `tbl$inputs$data` patching is needed.
+
+This also gets row placement and column ordering for free, both verified
+by prototype:
+- `add_stat()` defaults to `location = everything() ~ "label"` — results
+  land on the variable label row only; level and missing rows are `NA`
+  automatically, with no manual `row_type` filtering.
+- Columns appear in the gtsummary object in call order. Calling
+  `add_overall()` (if enabled) **before** `add_stat()` (N pairs, then SMD)
+  **before** `add_p()` produces exactly `label | Overall | ref | other |
+  N pairs | SMD | p-value` with no reordering step.
+
+Concretely, the pipeline (after building `tbl <- table_one(...)` as
+described above) is:
+
+```r
+tbl <- tbl %>%
+  {if (add_n_pairs) add_stat(., fns = everything() ~ n_pairs_stat_fn) else .} %>%
+  {if (add_smd)     add_stat(., fns = everything() ~ smd_stat_fn)     else .} %>%
+  {if (add_p)       add_p(., test = list(all_continuous()  ~ paired_cont_test_fn,
+                                          all_categorical() ~ paired_cat_test_fn),
+                           pvalue_fun = pvalue_fun) else .}
+```
+
+where `n_pairs_stat_fn` and `smd_stat_fn` are closures returning a one-row
+tibble with an already-formatted **character** value (each function knows
+its own `variable` name and therefore its own `decimalplaces()`-derived
+digit count — no separate per-column `fmt_fun` step is needed), and
+`paired_cont_test_fn`/`paired_cat_test_fn` are closures returning a one-row
+tibble with a numeric `p.value` column. `add_p()`'s own `pvalue_fun`
+argument formats custom-test p-values exactly as it does named tests
+(verified by prototype) — table_one_paired's `pvalue_fun` argument is
+passed straight through, matching `table_one()`'s own usage. The analysis
+variable set is implicitly whatever variables `table_one()` placed on
+label rows (character/Date columns it drops are simply never asked for a
+stat, since gtsummary only calls these functions for variables present in
+the table). Headers via `modify_header()`, footnotes via
+`modify_footnote_header()` / `modify_footnote_body()`. `sort_by_p = TRUE`
+then uses `gtsummary::sort_p()`, which operates on the `p.value`
+table-body column as usual — unaffected by this change.
 
 ## Paired p-values
 
