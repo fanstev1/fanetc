@@ -77,7 +77,7 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   call in the caller's frame, so `survdiff`/`Surv` are now namespace-qualified in
   the rewritten call (event_time_desp.R ~line 358).
 
-## table_one_paired() — design FINALIZED, not yet implemented (2026-07-08)
+## table_one_paired() — IMPLEMENTED (2026-07-08)
 
 - New feature designed with the user: `table_one_paired(df, pair_id, group, ...)` for
   paired data (long format, pair-ID column, grouping variable with **exactly 2
@@ -114,17 +114,18 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
   `dev-tests/test_table_one_paired.R` (17-item test plan in the spec); `smd` package
   to be added to Imports (on the Posit 2025-03-31 snapshot, not yet installed
   locally).
-- Status: spec finalized and user-reviewed. Next step per the brainstorming
-  workflow: superpowers:writing-plans skill for the implementation plan → implement.
+- Status: implementation complete. Code in `R/desp_table_paired.R`; tests in
+  `dev-tests/test_table_one_paired.R` (84 passing checks, 1 skip for optional
+  `flextable`); docs regenerated via roxygen2 (`NAMESPACE` exports
+  `table_one_paired`, `man/table_one_paired.Rd` created); full dev-tests suite
+  green and a clean-session install smoke test passes.
 
 ## Next steps (priority order)
 
-1. table_one_paired(): write the implementation plan (superpowers:writing-plans),
-   then implement per the spec.
-2. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
+1. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
    unverified metrics (line counts, performance table) — trim or rewrite.
-3. Longer term: convert dev-tests/ into a proper testthat suite.
-4. Smaller review findings not yet addressed: show_surv silently resets user-supplied
+2. Longer term: convert dev-tests/ into a proper testthat suite.
+3. Smaller review findings not yet addressed: show_surv silently resets user-supplied
    `y_lim` to c(0,1); `grepl("0", state)` in prepare_survfit would misclassify a state
    named "10"; show_cif @param docs are copy-paste errors (partially fixed).
 
