@@ -114,3 +114,43 @@
     dplyr::tibble(p.value = p)
   }
 }
+
+.paired_make_n_pairs_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level) {
+  function(data, variable, by, ...) {
+    wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
+    dplyr::tibble(n_pairs = formatC(nrow(wide), format = "d"))
+  }
+}
+
+.paired_make_smd_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level, pairing_method) {
+  function(data, variable, by, ...) {
+    wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
+    x_var <- paired_df[[variable]]
+    is_cont <- is.numeric(x_var)
+
+    val <- if (pairing_method == "repeated_measure" && is_cont) {
+      if (nrow(wide) < 2) {
+        NA_real_
+      } else {
+        diff <- wide$.other - wide$.ref
+        sd_diff <- stats::sd(diff)
+        if (is.na(sd_diff) || isTRUE(sd_diff == 0)) NA_real_ else mean(diff) / sd_diff
+      }
+    } else {
+      if (nrow(wide) == 0) {
+        NA_real_
+      } else {
+        x <- c(wide$.ref, wide$.other)
+        g <- factor(c(rep(ref_level, nrow(wide)), rep(other_level, nrow(wide))), levels = c(ref_level, other_level))
+        res <- tryCatch(smd::smd(x = x, g = g, gref = 1L), error = function(e) NULL)
+        # smd::smd()'s own sign convention (verified empirically, not just from its
+        # docs) is reference MINUS term/other -- the opposite of this design's
+        # "non-reference minus reference" convention -- so negate it here.
+        if (is.null(res)) NA_real_ else -res$estimate[1]
+      }
+    }
+
+    dec <- if (is_cont) max(1L, decimalplaces(x_var)) else 1L
+    dplyr::tibble(smd = if (is.na(val)) "---" else formatC(val, digits = dec, format = "f"))
+  }
+}

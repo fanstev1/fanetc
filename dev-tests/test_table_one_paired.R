@@ -156,4 +156,94 @@ dzero <- data.frame(pid = c(1, 2), grp = factor(c("A", "B"), levels = c("A", "B"
 p_zero <- .paired_make_cont_test_fn(dzero, "pid", "grp", "A", "B", "meansd")(data = NULL, variable = "v", by = NULL)$p.value
 check("cont test: zero complete pairs -> NA (no error)", identical(p_zero, NA_real_))
 
+## ---- SMD and N-pairs closures ----
+
+n_fn <- .paired_make_n_pairs_fn(dpaired, "pid", "grp", "A", "B")
+check("n_pairs: counts complete pairs for cont", n_fn(data = NULL, variable = "cont", by = NULL)$n_pairs == as.character(n))
+
+# introduce one incomplete pair for a fresh variable to check N pairs != nrow
+dpaired$cont_partial <- dpaired$cont
+dpaired$cont_partial[dpaired$pid == 1 & dpaired$grp == "B"] <- NA
+n_fn2 <- .paired_make_n_pairs_fn(dpaired, "pid", "grp", "A", "B")
+check("n_pairs: excludes incomplete pair", n_fn2(data = NULL, variable = "cont_partial", by = NULL)$n_pairs == as.character(n - 1))
+
+# SMD: matching method matches direct smd::smd on complete pairs, SIGN-FLIPPED.
+# smd::smd()'s own convention is reference-minus-other (verified empirically: with
+# gref=1 and group 1 having the smaller mean, its `estimate` comes out negative) --
+# the opposite of this design's "non-reference minus reference" convention -- so
+# the closure negates it and this test must too.
+smd_fn_match <- .paired_make_smd_fn(dpaired, "pid", "grp", "A", "B", "matching")
+smd_match <- smd_fn_match(data = NULL, variable = "cont", by = NULL)$smd
+wide_c2 <- .paired_wide(dpaired, "pid", "grp", "A", "B", "cont")
+x_long <- c(wide_c2$.ref, wide_c2$.other)
+g_long <- factor(c(rep("A", nrow(wide_c2)), rep("B", nrow(wide_c2))), levels = c("A", "B"))
+expected_smd <- -smd::smd(x = x_long, g = g_long, gref = 1L)$estimate[1]
+dec_cont <- max(1L, decimalplaces(dpaired$cont))
+check("smd: matching method matches direct smd::smd (sign-corrected)",
+      smd_match == formatC(expected_smd, digits = dec_cont, format = "f"))
+
+# SMD: repeated_measure method matches hand-computed Cohen's d_z
+smd_fn_rm <- .paired_make_smd_fn(dpaired, "pid", "grp", "A", "B", "repeated_measure")
+smd_rm <- smd_fn_rm(data = NULL, variable = "cont", by = NULL)$smd
+diff <- wide_c2$.other - wide_c2$.ref
+expected_dz <- mean(diff) / sd(diff)
+check("smd: repeated_measure matches hand-computed Cohen's d_z",
+      smd_rm == formatC(expected_dz, digits = dec_cont, format = "f"))
+
+# SMD: categorical uses marginal smd in BOTH methods (no within-pair categorical SMD)
+smd_cat_match <- .paired_make_smd_fn(dpaired, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "cat2", by = NULL)$smd
+smd_cat_rm    <- .paired_make_smd_fn(dpaired, "pid", "grp", "A", "B", "repeated_measure")(data = NULL, variable = "cat2", by = NULL)$smd
+check("smd: categorical identical under both pairing methods", smd_cat_match == smd_cat_rm)
+check("smd: categorical uses 1 decimal", grepl("^-?[0-9]+\\.[0-9]$", smd_cat_match))
+
+# SMD: integer-valued continuous variable still gets floor-of-1 decimal
+dpaired$int_var <- round(dpaired$cont)
+check("decimalplaces: integer-valued var has 0 decimals natively", decimalplaces(dpaired$int_var) == 0L)
+smd_int <- .paired_make_smd_fn(dpaired, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "int_var", by = NULL)$smd
+check("smd: integer-valued continuous var floored to 1 decimal", grepl("^-?[0-9]+\\.[0-9]$", smd_int))
+
+# degenerate: zero-variance within-pair differences (d_z) -> "---"
+dconst <- data.frame(pid = rep(1:5, each = 2), grp = factor(rep(c("A", "B"), 5), levels = c("A", "B")), v = 5)
+smd_const <- .paired_make_smd_fn(dconst, "pid", "grp", "A", "B", "repeated_measure")(data = NULL, variable = "v", by = NULL)$smd
+check("smd: zero-variance differences -> '---'", smd_const == "---")
+
+# degenerate: single complete pair -> d_z NA -> "---"
+smd_single <- .paired_make_smd_fn(dsingle, "pid", "grp", "A", "B", "repeated_measure")(data = NULL, variable = "v", by = NULL)$smd
+check("smd: single complete pair (d_z) -> '---'", smd_single == "---")
+
+# degenerate: zero complete pairs -> "---"
+smd_zero <- .paired_make_smd_fn(dzero, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "v", by = NULL)$smd
+check("smd: zero complete pairs -> '---'", smd_zero == "---")
+
+# Sign sanity check, independent of the closure's own internal computation: when
+# the "other" (non-reference) level is unambiguously and consistently larger, the
+# displayed SMD must be positive under BOTH pairing methods. Realistic (nonzero,
+# comparable-magnitude) within-group variance is used deliberately -- a degenerate
+# near-zero-variance setup makes the marginal pooled-variance SMD numerically
+# unstable (division by a near-zero denominator), which very nearly produced a
+# false negative in this exact check while this plan was being written.
+set.seed(41)
+n_sign <- 30
+dsign <- data.frame(pid = rep(1:n_sign, each = 2), grp = rep(c("A", "B"), n_sign), v = NA_real_)
+dsign$grp <- factor(dsign$grp, levels = c("A", "B"))
+v_a <- rnorm(n_sign, 0, 3)
+dsign$v[dsign$grp == "A"] <- v_a
+dsign$v[dsign$grp == "B"] <- v_a + rnorm(n_sign, 5, 2)  # other = reference + positive shift + noise
+sign_match <- .paired_make_smd_fn(dsign, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "v", by = NULL)$smd
+sign_rm    <- .paired_make_smd_fn(dsign, "pid", "grp", "A", "B", "repeated_measure")(data = NULL, variable = "v", by = NULL)$smd
+check("smd: other-minus-reference sign is positive when other > reference (matching)", !grepl("^-", sign_match))
+check("smd: other-minus-reference sign is positive when other > reference (repeated_measure)", !grepl("^-", sign_rm))
+
+# Same sign check for a CATEGORICAL (logical) variable -- the negation fix applies
+# to the marginal smd::smd() path used for all categorical variables under both
+# pairing methods, not just continuous ones, so this needs its own independent check.
+set.seed(7)
+n_cat <- 30
+dsign_cat <- data.frame(pid = rep(1:n_cat, each = 2), grp = rep(c("A", "B"), n_cat), flag = NA)
+dsign_cat$grp <- factor(dsign_cat$grp, levels = c("A", "B"))
+dsign_cat$flag[dsign_cat$grp == "A"] <- sample(c(TRUE, FALSE), n_cat, TRUE, prob = c(0.2, 0.8))
+dsign_cat$flag[dsign_cat$grp == "B"] <- sample(c(TRUE, FALSE), n_cat, TRUE, prob = c(0.8, 0.2))
+sign_cat_match <- .paired_make_smd_fn(dsign_cat, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "flag", by = NULL)$smd
+check("smd: categorical other-minus-reference sign is positive when other prevalence > reference", !grepl("^-", sign_cat_match))
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
