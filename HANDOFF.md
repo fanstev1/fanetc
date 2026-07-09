@@ -82,43 +82,65 @@ working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
 - New feature designed with the user: `table_one_paired(df, pair_id, group, ...)` for
   paired data (long format, pair-ID column, grouping variable with **exactly 2
   levels** — 3-level support was considered and explicitly dropped during design).
-- **Full spec (authoritative, read it before implementing):**
-  `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`. The design went
-  through two rounds of external review by Codex (via the codex:codex-rescue agent;
-  needs `codex login`). Round 1 found two critical integration flaws, both resolved
-  by redesign; round 2 endorsed the result and its tightening items are folded in.
+- **Full spec (authoritative):** `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`.
+  **Implementation plan (task-by-task, with the executable code that was
+  actually built):** `docs/superpowers/plans/2026-07-08-table-one-paired-implementation.md`.
+  Both went through multiple rounds of external review by Codex (via the
+  codex:codex-rescue agent; needs `codex login`) — the design spec caught and
+  fixed two critical integration flaws before any code was written; the
+  implementation plan caught a real sign-convention bug in the SMD calculation
+  (see below) before it shipped.
 - Key decisions, all confirmed by the user:
   - Tests: paired t / Wilcoxon signed-rank per `continuous_stat`;
     `stats::mcnemar.test` on the k×k pair table (McNemar/Bowker) for categorical.
     Descriptives use all rows; tests/SMD use per-variable complete pairs; N-pairs
     column reports the count.
   - `pairing_method = c("repeated_measure", "matching")`: matching → marginal
-    smd::smd (pooled variance); repeated_measure → Cohen's d_z (within-pair SD) for
-    continuous, marginal SMD for categorical in both modes. Footnote states method
-    + reference level.
+    smd::smd (pooled variance, **negated** — see gotcha below); repeated_measure
+    → Cohen's d_z (within-pair SD) for continuous, marginal SMD for categorical
+    in both modes. Footnote states method + reference level.
   - `ref_group` argument: default first factor level / most-frequent for character
     (first-observed tie-break) / sorted-first for logical-numeric; sets first group
     column and SMD sign (non-reference minus reference).
   - SMD digits: decimalplaces(x) with floor of 1 for continuous; 1 decimal for
     categorical.
-  - **Integration mechanism (the critical fix):** do NOT use add_p()/add_stat()
-    custom functions — pair_id cannot ride inside tbl$inputs$data. Compute paired
-    stats directly from the validated input df and merge via modify_table_body()
-    keyed on variable + row_type == "label". table_one(add_p = FALSE) builds the
-    descriptive table and receives the data WITHOUT the pair_id column. Analysis
-    variable set = label rows of the returned table. Final layout via
-    modify_column_order(). Compact method-class p footnote.
+  - **Integration mechanism (as actually built — differs from an earlier spec
+    draft):** gtsummary 2.1.0 has no `modify_column_order()` function (confirmed
+    absent from its exports), so the originally-planned manual
+    `modify_table_body()` merge couldn't work. The shipped mechanism uses
+    `gtsummary::add_stat()`/`add_p()` with **closures that ignore their own
+    `data` argument** and instead close over `table_one_paired()`'s own
+    validated data frame (which does contain `pair_id`) — so `pair_id` never
+    needs to ride inside the tbl_summary object at all. `add_stat()`'s default
+    `location = "label"` places N pairs/SMD on label rows only for free, and
+    calling `add_overall()` → `add_stat()` (N pairs) → `add_stat()` (SMD) →
+    `add_p()` in that order produces the correct final column order with no
+    separate reordering step. `table_one(add_p = FALSE)` still builds the
+    descriptive table and still never receives the `pair_id` column.
   - Missing group rows and NA/empty pair IDs dropped with messages (before the
-    duplicate-pair-member validation, which errors).
-- New code goes in a NEW file `R/desp_table_paired.R` (repo convention); tests in
-  `dev-tests/test_table_one_paired.R` (17-item test plan in the spec); `smd` package
-  to be added to Imports (on the Posit 2025-03-31 snapshot, not yet installed
-  locally).
-- Status: implementation complete. Code in `R/desp_table_paired.R`; tests in
-  `dev-tests/test_table_one_paired.R` (84 passing checks, 1 skip for optional
-  `flextable`); docs regenerated via roxygen2 (`NAMESPACE` exports
-  `table_one_paired`, `man/table_one_paired.Rd` created); full dev-tests suite
-  green and a clean-session install smoke test passes.
+    duplicate-pair-member validation, which errors); `include` normalized
+    against the original data with `pair_id` stripped and `group` always kept,
+    erroring with a clear message (not gtsummary's cryptic one) if nothing
+    real remains to summarize.
+- New code lives in `R/desp_table_paired.R` (repo convention); tests in
+  `dev-tests/test_table_one_paired.R`; `smd` package added to DESCRIPTION
+  Imports (Posit 2025-03-31 snapshot).
+- **Gotcha for anyone touching the SMD code:** `smd::smd()`'s own sign
+  convention is *reference minus other*, the opposite of this design's
+  *non-reference minus reference* — verified empirically (not just from its
+  docs) during the plan's review. `.paired_make_smd_fn()` negates the raw
+  `smd::smd()` result for exactly this reason; Cohen's d_z needs no such
+  negation (already correctly signed by construction). If this negation is
+  ever "cleaned up," every `pairing_method = "matching"` SMD and every
+  categorical SMD will silently flip sign.
+- Status: implementation complete, built via subagent-driven-development
+  (fresh implementer + reviewer subagent pair per task, all 8 tasks approved).
+  Code in `R/desp_table_paired.R`; tests in `dev-tests/test_table_one_paired.R`
+  (84 passing checks, 1 skip for optional `flextable`); docs regenerated via
+  roxygen2 (`NAMESPACE` exports `table_one_paired`, `man/table_one_paired.Rd`
+  created); full dev-tests suite green and a clean-session install smoke test
+  passes. Not yet pushed to origin — the final whole-branch code review is
+  still pending.
 
 ## Next steps (priority order)
 
