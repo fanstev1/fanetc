@@ -486,6 +486,19 @@ check("smd: 2-level FACTOR categorical SMD is non-negative (not negated, unlike 
 check("smd: 2-level factor SMD matches un-negated smd::smd() magnitude",
       smd_2f == formatC(expected_2f, digits = 1L, format = "f"))
 
+# Raw CHARACTER (not factor) must behave identically to factor -- neither
+# is.numeric() nor is.logical() match a character vector, so it takes the
+# same "not negated" path. Verified separately from the factor case above
+# since the fix's guard tests type, and character/factor are distinct types
+# even though smd::smd() treats them the same.
+dsmd_2c <- dsmd_2f
+dsmd_2c$sex <- as.character(dsmd_2c$sex)
+smd_2c <- .paired_make_smd_fn(dsmd_2c, "pid", "grp", "A", "B", "matching")(data = NULL, variable = "sex", by = NULL)$smd
+check("smd: 2-level CHARACTER categorical SMD is non-negative (behaves like factor, not negated)",
+      !grepl("^-", smd_2c))
+check("smd: 2-level character SMD matches the factor-variable SMD value",
+      smd_2c == smd_2f)
+
 # Confirm the LOGICAL case is still correctly negated (regression guard: logical
 # must stay signed, unlike factor/character of the same 2-level cardinality)
 logical_sign_check <- sign_cat_match  # from the existing logical sign test earlier in this file
