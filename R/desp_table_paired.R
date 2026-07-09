@@ -64,3 +64,15 @@
 
   list(data = df, ref_level = ref, other_level = other)
 }
+
+.paired_wide <- function(paired_df, pair_id_name, group_name, ref_level, other_level, var) {
+  wide <- tidyr::pivot_wider(
+    paired_df[c(pair_id_name, group_name, var)],
+    id_cols = dplyr::all_of(pair_id_name),
+    names_from = dplyr::all_of(group_name),
+    values_from = dplyr::all_of(var)
+  )
+  names(wide)[names(wide) == ref_level]   <- ".ref"
+  names(wide)[names(wide) == other_level] <- ".other"
+  wide[stats::complete.cases(wide[c(".ref", ".other")]), , drop = FALSE]
+}

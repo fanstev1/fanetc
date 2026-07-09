@@ -85,4 +85,17 @@ check("prep: pair_id as character works",
 check("prep: pair_id as factor works",
       { d <- df1; d$pid <- factor(d$pid); nrow(.paired_prepare_data(d, "pid", "grp", NULL)$data) == 5 })
 
+## ---- .paired_wide() ----
+
+dfw <- data.frame(
+  pid = c(1, 1, 2, 2, 3, 3, 4),
+  grp = c("A", "B", "A", "B", "A", "B", "A"),
+  x   = c(10, 12, NA, 5, 7, 8, 99)
+)
+dfw$grp <- factor(dfw$grp, levels = c("A", "B"))
+w <- .paired_wide(dfw, "pid", "grp", "A", "B", "x")
+check("wide: only complete pairs kept (pair 2 has NA, pair 4 has no B row)", nrow(w) == 2)
+check("wide: pair 1 values correct", w$.ref[w$pid == 1] == 10 && w$.other[w$pid == 1] == 12)
+check("wide: pair 3 values correct", w$.ref[w$pid == 3] == 7 && w$.other[w$pid == 3] == 8)
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
