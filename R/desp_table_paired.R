@@ -76,3 +76,41 @@
   names(wide)[names(wide) == other_level] <- ".other"
   wide[stats::complete.cases(wide[c(".ref", ".other")]), , drop = FALSE]
 }
+
+.paired_make_cont_test_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level, continuous_stat) {
+  function(data, variable, by, ...) {
+    wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
+    p <- tryCatch(
+      withCallingHandlers({
+        if (continuous_stat == "meansd") {
+          stats::t.test(wide$.other, wide$.ref, paired = TRUE)$p.value
+        } else {
+          stats::wilcox.test(wide$.other, wide$.ref, paired = TRUE)$p.value
+        }
+      }, warning = function(w) invokeRestart("muffleWarning")),
+      error = function(e) NA_real_
+    )
+    # mcnemar.test()/t.test() degenerate cases can return NaN (e.g. division by a
+    # zero-discordant-pairs denominator) rather than NA_real_; the design specifies
+    # NA, so normalize here rather than leaving NaN in the table body.
+    if (!is.finite(p)) p <- NA_real_
+    dplyr::tibble(p.value = p)
+  }
+}
+
+.paired_make_cat_test_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level) {
+  function(data, variable, by, ...) {
+    wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
+    p <- tryCatch(
+      withCallingHandlers({
+        lv <- union(as.character(unique(wide$.ref)), as.character(unique(wide$.other)))
+        ref_f   <- factor(as.character(wide$.ref),   levels = lv)
+        other_f <- factor(as.character(wide$.other), levels = lv)
+        stats::mcnemar.test(table(ref_f, other_f))$p.value
+      }, warning = function(w) invokeRestart("muffleWarning")),
+      error = function(e) NA_real_
+    )
+    if (!is.finite(p)) p <- NA_real_
+    dplyr::tibble(p.value = p)
+  }
+}

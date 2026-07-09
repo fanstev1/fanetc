@@ -98,4 +98,62 @@ check("wide: only complete pairs kept (pair 2 has NA, pair 4 has no B row)", nro
 check("wide: pair 1 values correct", w$.ref[w$pid == 1] == 10 && w$.other[w$pid == 1] == 12)
 check("wide: pair 3 values correct", w$.ref[w$pid == 3] == 7 && w$.other[w$pid == 3] == 8)
 
+## ---- paired test closures ----
+
+set.seed(11)
+n <- 30
+dpaired <- data.frame(pid = rep(1:n, each = 2), grp = rep(c("A", "B"), n))
+dpaired$grp <- factor(dpaired$grp, levels = c("A", "B"))
+base_val <- rnorm(n, 50, 10)
+dpaired$cont <- NA_real_
+dpaired$cont[dpaired$grp == "A"] <- base_val
+dpaired$cont[dpaired$grp == "B"] <- base_val + rnorm(n, 2, 3)
+
+cont_fn_meansd <- .paired_make_cont_test_fn(dpaired, "pid", "grp", "A", "B", "meansd")
+p_meansd <- cont_fn_meansd(data = NULL, variable = "cont", by = NULL)$p.value
+wide_c <- .paired_wide(dpaired, "pid", "grp", "A", "B", "cont")
+expected_t <- stats::t.test(wide_c$.other, wide_c$.ref, paired = TRUE)$p.value
+check("cont test: meansd matches direct paired t.test", isTRUE(all.equal(p_meansd, expected_t)))
+
+cont_fn_mediqr <- .paired_make_cont_test_fn(dpaired, "pid", "grp", "A", "B", "mediqr")
+p_mediqr <- suppressWarnings(cont_fn_mediqr(data = NULL, variable = "cont", by = NULL)$p.value)
+expected_w <- suppressWarnings(stats::wilcox.test(wide_c$.other, wide_c$.ref, paired = TRUE)$p.value)
+check("cont test: mediqr matches direct paired wilcox.test", isTRUE(all.equal(p_mediqr, expected_w)))
+
+dpaired$cat2 <- factor(sample(c("y", "n"), 2 * n, TRUE))
+cat_fn <- .paired_make_cat_test_fn(dpaired, "pid", "grp", "A", "B")
+p_cat <- cat_fn(data = NULL, variable = "cat2", by = NULL)$p.value
+wide_cat <- .paired_wide(dpaired, "pid", "grp", "A", "B", "cat2")
+lv <- union(as.character(unique(wide_cat$.ref)), as.character(unique(wide_cat$.other)))
+tab_expected <- table(factor(as.character(wide_cat$.ref), levels = lv),
+                       factor(as.character(wide_cat$.other), levels = lv))
+expected_mc <- stats::mcnemar.test(tab_expected)$p.value
+check("cat test: matches direct mcnemar.test on union-of-levels table", isTRUE(all.equal(p_cat, expected_mc)))
+
+# 3-category variable -> McNemar-Bowker (mcnemar.test on a k x k table)
+dpaired$cat3 <- factor(sample(c("x", "y", "z"), 2 * n, TRUE))
+cat_fn3 <- .paired_make_cat_test_fn(dpaired, "pid", "grp", "A", "B")
+p_cat3 <- cat_fn3(data = NULL, variable = "cat3", by = NULL)$p.value
+check("cat test: 3-level factor returns a numeric p-value (Bowker)", is.numeric(p_cat3) && !is.na(p_cat3))
+
+# degenerate: all-concordant pairs -> NA, no error
+dconc <- data.frame(pid = rep(1:5, each = 2), grp = factor(rep(c("A", "B"), 5), levels = c("A", "B")),
+                     same = rep(c("yes"), 10))
+p_conc <- .paired_make_cat_test_fn(dconc, "pid", "grp", "A", "B")(data = NULL, variable = "same", by = NULL)$p.value
+# strict identical(), not just is.na(): mcnemar.test() on an all-concordant table
+# returns NaN internally (0/0), and the design specifies NA -- this asserts the
+# closure's NaN -> NA_real_ normalization actually ran, not merely that is.na()
+# happens to accept both.
+check("cat test: all-concordant pairs -> exactly NA_real_, not NaN (no error)", identical(p_conc, NA_real_))
+
+# degenerate: single complete pair -> NA, no error (t.test needs >= 2)
+dsingle <- data.frame(pid = c(1, 1), grp = factor(c("A", "B"), levels = c("A", "B")), v = c(1, 2))
+p_single <- .paired_make_cont_test_fn(dsingle, "pid", "grp", "A", "B", "meansd")(data = NULL, variable = "v", by = NULL)$p.value
+check("cont test: single complete pair -> NA (no error)", identical(p_single, NA_real_))
+
+# degenerate: zero complete pairs -> NA, no error
+dzero <- data.frame(pid = c(1, 2), grp = factor(c("A", "B"), levels = c("A", "B")), v = c(1, 2))
+p_zero <- .paired_make_cont_test_fn(dzero, "pid", "grp", "A", "B", "meansd")(data = NULL, variable = "v", by = NULL)$p.value
+check("cont test: zero complete pairs -> NA (no error)", identical(p_zero, NA_real_))
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
