@@ -281,4 +281,163 @@ res_off <- table_one_paired(tdf, pair_id = pid, group = visit, add_p = FALSE, ad
 check("main: add_p/add_smd/add_n_pairs/add_overall = FALSE removes those columns",
       !any(c("stat_0", "n_pairs", "smd", "p.value") %in% res_off$table_styling$header$column))
 
+## ---- full integration tests ----
+
+set.seed(31)
+nb <- 40
+big <- data.frame(
+  pid = rep(1:nb, each = 2),
+  visit = rep(c("Baseline", "Followup"), nb),
+  age = NA_real_,
+  stage = factor(sample(c("I", "II", "III"), 2 * nb, TRUE)),
+  responded = sample(c(TRUE, FALSE), 2 * nb, TRUE)
+)
+base_age <- rnorm(nb, 55, 8)
+big$age[big$visit == "Baseline"] <- base_age
+big$age[big$visit == "Followup"] <- base_age + rnorm(nb, 1.5, 3)
+
+res_big <- table_one_paired(big, pair_id = pid, group = visit, pairing_method = "repeated_measure")
+
+# row placement: N pairs/SMD/p on label rows only; level rows blank
+tb <- res_big$table_body
+lbl <- tb[tb$row_type == "label", ]
+lvl <- tb[tb$row_type == "level", ]
+check("integration: all label rows have non-NA n_pairs/smd", all(!is.na(lbl$n_pairs)) && all(!is.na(lbl$smd)))
+check("integration: all level rows have NA n_pairs/smd/p.value",
+      all(is.na(lvl$n_pairs)) && all(is.na(lvl$smd)) && all(is.na(lvl$p.value)))
+
+# dichotomous (logical) variable gets exactly 1 row with stats filled
+resp_rows <- tb[tb$variable == "responded", ]
+check("integration: dichotomous logical variable produces exactly 1 row", nrow(resp_rows) == 1)
+check("integration: dichotomous row has n_pairs/smd/p.value filled",
+      !is.na(resp_rows$n_pairs) && !is.na(resp_rows$smd) && !is.na(resp_rows$p.value))
+
+# descriptive cells match table_one() on the data without pair_id.
+# NOTE: table_one() itself drops ALL character columns before summary construction
+# (R/desp_table_gtsummary.R:124), including a character `group` column, which would
+# make dplyr::pull(df, all_of(group_name)) fail at line 142. table_one_paired()
+# never hits this because .paired_prepare_data() always rebuilds `group` as a factor
+# before delegating -- so this direct comparison call must do the same conversion
+# (ref level first) to be a valid comparison at all.
+big_desc <- big[, c("visit", "age", "stage", "responded")]
+big_desc$visit <- factor(big_desc$visit, levels = c("Baseline", "Followup"))
+desc_only <- table_one(big_desc, group = visit, add_p = FALSE, add_overall = FALSE)
+check("integration: descriptive cells match table_one() (age, stat_1)",
+      identical(res_big$table_body$stat_1[res_big$table_body$variable == "age"],
+                desc_only$table_body$stat_1[desc_only$table_body$variable == "age"]))
+check("integration: descriptive cells match table_one() (stage levels, stat_2)",
+      identical(res_big$table_body$stat_2[res_big$table_body$row_type == "level" & res_big$table_body$variable == "stage"],
+                desc_only$table_body$stat_2[desc_only$table_body$row_type == "level" & desc_only$table_body$variable == "stage"]))
+
+# ref_group override flips column order and SMD sign
+res_flip <- table_one_paired(big, pair_id = pid, group = visit, pairing_method = "repeated_measure", ref_group = "Followup")
+check("integration: ref_group override changes which level is stat_1",
+      !identical(res_big$table_body$stat_1[res_big$table_body$variable == "age"],
+                 res_flip$table_body$stat_1[res_flip$table_body$variable == "age"]))
+smd_default <- as.numeric(res_big$table_body$smd[res_big$table_body$variable == "age"])
+smd_flipped <- as.numeric(res_flip$table_body$smd[res_flip$table_body$variable == "age"])
+check("integration: SMD sign flips when ref_group flips", isTRUE(all.equal(smd_default, -smd_flipped)))
+
+# continuous_stat = "mediqr" runs end-to-end without error
+res_mediqr <- suppressWarnings(table_one_paired(big, pair_id = pid, group = visit, continuous_stat = "mediqr"))
+check("integration: continuous_stat='mediqr' produces a valid table", inherits(res_mediqr, "gtsummary"))
+
+# matching pairing_method runs end-to-end and differs numerically from repeated_measure
+res_matching <- table_one_paired(big, pair_id = pid, group = visit, pairing_method = "matching")
+smd_matching <- as.numeric(res_matching$table_body$smd[res_matching$table_body$variable == "age"])
+check("integration: matching SMD differs from repeated_measure SMD for continuous var",
+      !isTRUE(all.equal(smd_matching, smd_default)))
+
+# degenerate variables through the FULL pipeline (not just the closures directly).
+# NOTE: `concordant` must be a FACTOR, not character -- table_one() drops character
+# columns entirely (R/desp_table_gtsummary.R:124), so a character column here would
+# silently vanish from the table and this would stop testing categorical degenerate
+# behavior at all. Each pair is concordant (same value in both members), but the
+# value varies ACROSS pairs so this is a genuine (not literally constant) factor.
+pair_vals <- rep(c("yes", "no"), 5)
+deg <- data.frame(
+  pid = rep(1:10, each = 2),
+  visit = rep(c("A", "B"), 10),
+  const_val = 5,
+  concordant = factor(rep(pair_vals, each = 2))
+)
+deg$visit <- factor(deg$visit, levels = c("A", "B"))
+res_deg <- table_one_paired(deg, pair_id = pid, group = visit)
+check("integration: degenerate variables produce a valid table, no error", inherits(res_deg, "gtsummary"))
+check("integration: concordant categorical variable survives into the table", "concordant" %in% res_deg$table_body$variable)
+check("integration: degenerate label-row p-values are NA, not crashing", all(is.na(res_deg$table_body$p.value[res_deg$table_body$row_type == "label"])))
+
+# missing/empty pair IDs dropped end-to-end; duplicates among dropped NA IDs do not error
+dmiss <- big
+dmiss$pid[c(1, 2)] <- NA  # drops one full pair's worth of rows (both rows share pid before reassignment... use distinct rows)
+dmiss$pid[3] <- NA
+res_miss <- suppressMessages(table_one_paired(dmiss, pair_id = pid, group = visit))
+check("integration: missing pair IDs dropped without error", inherits(res_miss, "gtsummary"))
+
+# sort_by_p ignored when add_p = FALSE (no error, and p.value column absent)
+res_sort_noP <- table_one_paired(big, pair_id = pid, group = visit, add_p = FALSE, sort_by_p = TRUE)
+check("integration: sort_by_p with add_p=FALSE does not error and has no p.value column",
+      !("p.value" %in% res_sort_noP$table_styling$header$column))
+
+# post-merge gtsummary compatibility: sort_p(), as_tibble(), as_flex_table() (if flextable installed)
+check("integration: sort_p() works after add_p with custom test",
+      inherits(tryCatch(gtsummary::sort_p(res_big), error = function(e) e), "gtsummary"))
+check("integration: as_tibble() works", is.data.frame(tryCatch(gtsummary::as_tibble(res_big), error = function(e) e)))
+if (requireNamespace("flextable", quietly = TRUE)) {
+  check("integration: as_flex_table() works", inherits(tryCatch(gtsummary::as_flex_table(res_big), error = function(e) e), "flextable"))
+} else {
+  cat("SKIP: as_flex_table() check (flextable not installed)\n")
+}
+
+# footnotes present, differ by pairing_method, and actually state the method/reference
+fn_rm <- res_big$table_styling$footnote_header$footnote[res_big$table_styling$footnote_header$column == "smd"]
+fn_match <- res_matching$table_styling$footnote_header$footnote[res_matching$table_styling$footnote_header$column == "smd"]
+check("integration: SMD footnote present", length(fn_rm) > 0 && nzchar(fn_rm[1]))
+check("integration: SMD footnote differs between pairing methods", !identical(fn_rm, fn_match))
+check("integration: SMD footnote names the reference level", grepl("Baseline", fn_rm[1]) && grepl("Followup", fn_rm[1]))
+check("integration: repeated_measure SMD footnote mentions within-pair SD", grepl("within-pair", fn_rm[1]))
+check("integration: matching SMD footnote mentions pooled/marginal variance", grepl("pooled-variance", fn_match[1]))
+fn_p <- res_big$table_styling$footnote_header$footnote[res_big$table_styling$footnote_header$column == "p.value"]
+check("integration: p-value footnote present and compact (not per-variable)", length(fn_p) > 0 && !grepl("age.*stage.*responded", fn_p[1]))
+check("integration: p-value footnote names paired t-test (meansd default)", grepl("paired t-test", fn_p[1]))
+check("integration: p-value footnote names McNemar", grepl("McNemar", fn_p[1]))
+
+# pair_id TYPE equivalence: character/factor/numeric pair_id must give identical results
+small <- big[big$pid <= 10, ]
+res_num  <- table_one_paired(small, pair_id = pid, group = visit)
+small_chr <- small; small_chr$pid <- as.character(small_chr$pid)
+res_chr  <- table_one_paired(small_chr, pair_id = pid, group = visit)
+small_fct <- small; small_fct$pid <- factor(small_fct$pid)
+res_fct  <- table_one_paired(small_fct, pair_id = pid, group = visit)
+check("integration: pair_id type (numeric vs character) gives identical n_pairs/smd/p",
+      identical(res_num$table_body[c("n_pairs", "smd", "p.value")], res_chr$table_body[c("n_pairs", "smd", "p.value")]))
+check("integration: pair_id type (numeric vs factor) gives identical n_pairs/smd/p",
+      identical(res_num$table_body[c("n_pairs", "smd", "p.value")], res_fct$table_body[c("n_pairs", "smd", "p.value")]))
+
+# include = c(pair_id) alone: after pair_id is stripped, zero real variables remain
+# (only `group` is left). table_one_paired() now owns this error explicitly (see
+# Task 6) with a clear message, rather than letting gtsummary's own cryptic error
+# ("names must be NULL or a character vector, not an empty integer vector" --
+# confirmed by direct execution of tbl_summary() on a by-only data frame) surface
+# to the user.
+check_err("integration: include=pid alone errors with a clear message (zero real variables remain)",
+      suppressMessages(table_one_paired(big, pair_id = pid, group = visit, include = pid)),
+      "selects no variables")
+
+# missing = "always": N pairs/SMD/p on the missing row must be NA/blank, not just level rows
+with_na <- big
+with_na$age[with_na$pid == 1 & with_na$visit == "Baseline"] <- NA
+res_always <- table_one_paired(with_na, pair_id = pid, group = visit, missing = "always")
+miss_row <- res_always$table_body[res_always$table_body$variable == "age" & res_always$table_body$row_type == "missing", ]
+check("integration: missing='always' produces a missing row for age", nrow(miss_row) == 1)
+check("integration: missing row has NA n_pairs/smd/p.value", is.na(miss_row$n_pairs) && is.na(miss_row$smd) && is.na(miss_row$p.value))
+
+# datadic entries for pair_id/group must not leak into the table's labels
+dic_leak <- data.frame(nm = c("pid", "visit", "age"), lbl = c("PAIR ID LEAK", "VISIT LEAK", "Age (years)"), stringsAsFactors = FALSE)
+res_leak <- table_one_paired(big, pair_id = pid, group = visit, datadic = dic_leak, var_name = nm, var_desp = lbl)
+labels_leak <- as_tibble(res_leak)[[1]]
+check("integration: datadic label for pair_id does not leak into the table", !("PAIR ID LEAK" %in% labels_leak))
+check("integration: datadic label for group does not leak into the table", !("VISIT LEAK" %in% labels_leak))
+check("integration: datadic label for a real variable still applies", "Age (years)" %in% labels_leak)
+
 if (ok) cat("\nALL PASS\n") else { cat("\nFAILURES PRESENT\n"); quit(status = 1) }
