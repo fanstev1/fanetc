@@ -449,8 +449,15 @@ dsingle <- data.frame(pid = c(1, 1), grp = factor(c("A", "B"), levels = c("A", "
 p_single <- .paired_make_cont_test_fn(dsingle, "pid", "grp", "A", "B", "meansd")(data = NULL, variable = "v", by = NULL)$p.value
 check("cont test: single complete pair -> NA (no error)", identical(p_single, NA_real_))
 
-# degenerate: zero complete pairs -> NA, no error
-dzero <- data.frame(pid = c(1, 2), grp = factor(c("A", "A"), levels = c("A", "B")), v = c(1, 2))
+# degenerate: zero complete pairs -> NA, no error.
+# NOTE: both group levels must be OBSERVED somewhere in the data (just never for the
+# same pair_id) -- if a level is entirely absent (e.g. grp = c("A", "A")),
+# tidyr::pivot_wider() never creates that column at all, and .paired_wide()'s
+# indexing wide[c(".ref", ".other")] errors on the missing column before the
+# closure's own tryCatch/degenerate-case logic is ever reached. Two different
+# pids, each present in only one group level, gives genuinely zero complete pairs
+# without starving pivot_wider of a column.
+dzero <- data.frame(pid = c(1, 2), grp = factor(c("A", "B"), levels = c("A", "B")), v = c(1, 2))
 p_zero <- .paired_make_cont_test_fn(dzero, "pid", "grp", "A", "B", "meansd")(data = NULL, variable = "v", by = NULL)$p.value
 check("cont test: zero complete pairs -> NA (no error)", identical(p_zero, NA_real_))
 ```
