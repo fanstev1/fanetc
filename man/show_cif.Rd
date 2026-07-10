@@ -32,9 +32,13 @@ show_cif(
 )
 }
 \arguments{
-\item{surv_obj}{a survfitms subject.}
+\item{surv_obj}{a survfitms object, as returned by estimate_cif().}
 
-\item{add_ci}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
+\item{evt_type}{the event-type code(s) (as encoded in surv_obj's states) to plot the cumulative incidence for.}
+
+\item{evt_label}{a function (or named vector) mapping event-type codes to display labels for the legend/strata.}
+
+\item{add_ci}{a logical parameter indicating whether confidence interval ribbons should be added to the plot.}
 
 \item{add_atrisk}{a logical parameter indicating whether at-risk table should be added to the figure.}
 
@@ -46,19 +50,27 @@ show_cif(
 
 \item{pvalue_pos}{a character parameter indicating where the p-value should be added to the plot.}
 
-\item{plot_theme}{a numeric vector recording the time points at which the event occurs.}
+\item{plot_theme}{a ggplot2 theme object applied to the plot.}
 
-\item{x_lab}{an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).}
+\item{x_lab}{the x-axis label.}
 
-\item{y_lab}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{y_lab}{the y-axis label.}
 
-\item{x_lim}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{x_lim}{a numeric vector of length 2 specifying the x-axis limits.}
 
-\item{y_lim}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
+\item{y_lim}{a numeric vector of length 2 specifying the y-axis limits.}
 
-\item{color_list}{input data}
+\item{x_break}{a numeric vector specifying the x-axis break points (default: automatic).}
+
+\item{y_break}{a numeric vector specifying the y-axis break points (default: automatic).}
+
+\item{color_scheme}{the color palette used for strata: "brewer", "grey", "viridis", or "manual".}
+
+\item{color_list}{a list of scale arguments, required only when color_scheme= 'manual' (e.g. list(values= c('red', 'blue'))).}
 
 \item{plot_cdf}{Not used}
+
+\item{print_fig}{a logical parameter indicating whether the figure should be printed to the active device.}
 }
 \value{
 A ggplot object.

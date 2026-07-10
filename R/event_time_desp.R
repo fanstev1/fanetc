@@ -98,7 +98,11 @@ prepare_survfit <- function(surv_obj) {
       strata = stemp,
       # state    = rep(surv_obj$state, each= length(surv_obj$time)),
       state = rep(
-        replace(surv_obj$state, nchar(surv_obj$state) == 0 | grepl("0", surv_obj$state), "0"),
+        # survival::survfit() labels the pre-event/reference state "(s0)" (or, on some
+        # versions, "") regardless of the original event factor's level names -- match
+        # that literal placeholder, not any state whose name merely contains "0"
+        # (e.g. a real competing-risk state named "10" must not be swept in here).
+        replace(surv_obj$state, nchar(surv_obj$state) == 0 | surv_obj$state == "(s0)", "0"),
         each = length(surv_obj$time)
       ),
       time = rep(surv_obj$time, length(surv_obj$state)),
@@ -402,8 +406,8 @@ show_surv<- function(surv_obj,
   scale_pair<- event_time_color_scales(color_scheme, color_list)
 
   if (!plot_cdf & !is.null(y_lim)) {
-    y_lim<- c(0, 1)
-    message("The parameter y_lim was reset to y_lim= c(0, 1) for survival function.")
+    y_lim<- c(0, max(y_lim, na.rm= TRUE))
+    message("The lower limit of y-axis was reset to 0 for survival function.")
   } else if (plot_cdf & !is.null(y_lim)) {
     y_lim<- c(0, max(y_lim, na.rm= TRUE))
     message("The lower limit of y-axis was reset to 0 for failure function.")
@@ -541,20 +545,26 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @details
 #' The function shows the cumulative incidence function for competing risks with and without strata.
 #'
-#' @param surv_obj a survfitms subject.
-#' @param x_lab an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
-#' @param y_lab a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param x_lim a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param y_lim a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
-#' @param color_list input data
-#' @param plot_theme a numeric vector recording the time points at which the event occurs.
-#' @param add_ci an integer vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
+#' @param surv_obj a survfitms object, as returned by estimate_cif().
+#' @param evt_type the event-type code(s) (as encoded in surv_obj's states) to plot the cumulative incidence for.
+#' @param evt_label a function (or named vector) mapping event-type codes to display labels for the legend/strata.
+#' @param add_ci a logical parameter indicating whether confidence interval ribbons should be added to the plot.
 #' @param add_atrisk a logical parameter indicating whether at-risk table should be added to the figure.
 #' @param add_legend a logical parameter indicating whether legend should be added to the figure.
 #' @param add_pvalue a logical parameter (default= FALSE) indiciates if a p-value should be added to the plot.
-#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
 #' @param atrisk_init_pos position of the "At-risk N:" header, in text lines below the panel bottom. Default: with more than one group the header starts on the line right after the x-axis title (2.23); with a single group it sits one full line of whitespace below it (3.06)
+#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
+#' @param plot_theme a ggplot2 theme object applied to the plot.
+#' @param x_lab the x-axis label.
+#' @param y_lab the y-axis label.
+#' @param x_lim a numeric vector of length 2 specifying the x-axis limits.
+#' @param y_lim a numeric vector of length 2 specifying the y-axis limits.
+#' @param x_break a numeric vector specifying the x-axis break points (default: automatic).
+#' @param y_break a numeric vector specifying the y-axis break points (default: automatic).
+#' @param color_scheme the color palette used for strata: "brewer", "grey", "viridis", or "manual".
+#' @param color_list a list of scale arguments, required only when color_scheme= 'manual' (e.g. list(values= c('red', 'blue'))).
 #' @param plot_cdf Not used
+#' @param print_fig a logical parameter indicating whether the figure should be printed to the active device.
 #' @return A ggplot object.
 #' @examples
 #' my_plot_theme<- theme_bw() +
