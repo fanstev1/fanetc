@@ -31,7 +31,9 @@ Suggests:
     mitools,
     openxlsx,
     sandwich,
-    svglite
+    svglite,
+    testthat (>= 3.0.0)
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.3
+Config/testthat/edition: 3
