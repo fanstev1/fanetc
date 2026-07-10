@@ -1,17 +1,8 @@
 # Quick Reference Guide
 
-## Installation
-
-```r
-# Install gtsummary
-install.packages("gtsummary")
-
-# Or use the development version
-devtools::install_github("ddsjoberg/gtsummary")
-
-# Update DESCRIPTION file
-usethis::use_package("gtsummary")
-```
+`gtsummary` (>= 2.1.0), `cardx`, and `broom` (>= 1.0.5) are already declared
+in `DESCRIPTION`'s `Imports`, so a normal package install brings them in —
+there's no separate installation step for `table_one()` users.
 
 ## Basic Usage
 
@@ -118,7 +109,7 @@ gtsummary::as_tibble(tbl)
 
 | Problem | Solution |
 |---------|----------|
-| Getting error about `group` | Use named parameter: `group = sex` (not positional) |
+| Confusion about `group` syntax | Both `table_one(df, sex)` (positional) and `table_one(df, group = sex)` (named) work — verified against the current implementation; named is just clearer |
 | Character variables included | They're auto-removed; if needed, convert to factor first |
 | Date variables included | They're auto-removed; summarize separately if needed |
 | Too many decimal places | Use `gtsummary::modify_fmt_fun()` |
@@ -138,31 +129,24 @@ table_one(df, group = sex, add_p = TRUE) %>%
   gtsummary::as_gt()
 ```
 
-## Performance Tips
+## Practical Tips
 
-1. **Large dataframes (>10k rows):** Performance is still good; no special handling needed
-2. **Many variables (>50):** Consider using `include` parameter to select subset
-3. **Multiple tables:** Save intermediate results to avoid recomputation
-4. **Memory:** gtsummary is memory-efficient; default output is optimized
+1. **Many variables (>50):** Use the `include` parameter to select a subset.
+2. **Multiple tables:** Save intermediate `table_one()` results to variables
+   rather than re-calling it, if you're going to reuse or combine them (e.g.
+   with `tbl_merge()`/`tbl_stack()`).
+
+(No performance/memory benchmark exists for `table_one()` in this repo, so
+this section no longer makes speed or memory claims.)
 
 ## File Locations
 
-- **New function:** `/R/desp_table_gtsummary.R`
-- **Migration guide:** `/MIGRATION_GUIDE.md`
+- **Implementation:** `/R/desp_table_gtsummary.R`
 - **Code comparison:** `/CODE_COMPARISON.md`
 - **Examples:** `/EXAMPLES.md`
 - **API reference:** `/API_REFERENCE.md`
+- **What changed vs. pre-refactor code:** `/REPRODUCING_LEGACY_RESULTS.md`
 - **This guide:** `/QUICKREF.md`
-
-## Migration Checklist
-
-- [ ] Install `gtsummary` package
-- [ ] Update `DESCRIPTION` file with gtsummary dependency
-- [ ] Replace `desp_table.R` with `desp_table_gtsummary.R`
-- [ ] Update function calls: `table_one(df, sex)` → `table_one(df, group = sex)`
-- [ ] Test with existing data
-- [ ] Update downstream code that depends on input dataframes
-- [ ] Consider removing old R files (keep as backup initially)
 
 ## Quick Examples
 
@@ -201,12 +185,12 @@ print(doc, "table.docx")
 
 | Aspect | Old | New |
 |--------|-----|-----|
-| Group parameter | Positional | Named: `group = ` |
-| Return type | Dataframe | `tbl_summary` object |
-| Variable type functions | Separate functions | Built into `tbl_summary()` |
+| Group parameter | Positional | Both positional and named `group = ` still work (verified) |
+| Return type | Dataframe | `tbl_summary`/`gtsummary` object — this is the real breaking change |
+| Variable type functions | Separate functions (`numeric_desp()` etc., removed) | Built into `tbl_summary()` |
 | Statistical tests | Manual | Automatic via `add_p()` |
-| Export formats | Limited | Multiple (HTML, Word, LaTeX, etc.) |
-| Code lines | ~800 | ~200 |
+| Export formats | CSV only | `as_gt`, `as_kable`, `as_flex_table`, `as_tibble`, `as_hux_table`, `as_hux_xlsx`, `as_kable_extra` (gtsummary 2.1.0 has no `as_latex()`) |
+| Code lines | 825 across 4 files (`git show 7ab169b:R/<file> \| wc -l` for each of `desp_table.R`, `numeric_desp.R`, `logical_desp.R`, `factor_desp.R`) | 397 in 1 file (`R/desp_table_gtsummary.R`) |
 
 ## Resources
 

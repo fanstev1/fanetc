@@ -162,21 +162,20 @@ print(doc, "table1.docx")
 - Requires post-processing for presentation
 
 ### New Output (gtsummary - Console Display)
+
+Verified against the current implementation: continuous variables get a
+single stat row (mean ± SD by default -- `continuous_stat = "mediqr"` would
+switch the whole table to median/IQR instead, but not show both), and logical
+variables get a single dichotomous row (the count of `TRUE`), not one row per
+level:
+
 ```
 | **Characteristic**     | **Overall**, n = 200 | **Control**, n = 100 | **Active**, n = 100 | **p-value** |
 |---|---|---|---|---|
-| Age (years) | | | | 0.042 |
-|   Mean ± SD | 48 ± 13 | 45 ± 12 | 52 ± 14 | |
-|   Median (Q1-Q3) | 48 (40-57) | 44 (37-53) | 51 (42-62) | |
-| Weight (kg) | | | | 0.421 |
-|   Mean ± SD | 71 ± 15 | 70 ± 15 | 72 ± 16 | |
-|   Median (Q1-Q3) | 71 (59-84) | 70 (58-82) | 71 (59-85) | |
-| Systolic BP (mmHg) | | | | 0.231 |
-|   Mean ± SD | 122 ± 15 | 120 ± 15 | 125 ± 16 | |
-|   Median (Q1-Q3) | 122 (110-133) | 119 (108-131) | 124 (112-136) | |
-| Disease Present | | | | <0.001 |
-|   No | 150 (75%) | 70 (70%) | 50 (50%) | |
-|   Yes | 50 (25%) | 30 (30%) | 50 (50%) | |
+| Age (years) | 48 ± 13 | 45 ± 12 | 52 ± 14 | 0.042 |
+| Weight (kg) | 71 ± 15 | 70 ± 15 | 72 ± 16 | 0.421 |
+| Systolic BP (mmHg) | 122 ± 15 | 120 ± 15 | 125 ± 16 | 0.231 |
+| Disease Present | 50 (25%) | 30 (30%) | 50 (50%) | <0.001 |
 | Disease Severity | | | | 0.214 |
 |   Mild | 43 (21%) | 23 (23%) | 20 (20%) | |
 |   Moderate | 57 (29%) | 27 (27%) | 30 (30%) | |
@@ -230,8 +229,9 @@ officer::print(doc, "table1.docx")
 gt_tbl <- gtsummary::as_gt(tbl_new)
 gt::gtsave(gt_tbl, "table1.html")
 
-# Save as LaTeX
-gtsummary::as_latex(tbl_new)
+# Note: gtsummary 2.1.0 has no as_latex() (verified against its exports --
+# an earlier draft of this doc claimed one). For LaTeX, go through
+# as_kable_extra() or as_gt() instead.
 ```
 
 All with consistent formatting!
@@ -353,8 +353,6 @@ library(openxlsx)
 # Step 4: Post-process in Word manually
 ```
 
-**Time: 30+ minutes**
-
 ### New Workflow
 ```r
 # Step 1: Create baseline table
@@ -377,38 +375,45 @@ doc <- read_docx() %>%
 print(doc, "report.docx")
 ```
 
-**Time: 5 minutes**
+No timing study exists for either workflow, so this document no longer
+claims specific minute counts — the new workflow is fewer steps and fewer
+lines by inspection (compare the two code blocks above), which is the part
+that's actually verifiable.
 
 ---
 
 ## Summary of Improvements
 
-| Aspect | Original | New | Improvement |
-|--------|----------|-----|-------------|
-| **Function calls** | 3+ | 1 | 75% simpler |
-| **Lines of code** | 800 | 200 | 75% less |
-| **Export formats** | 1 (CSV) | 4+ (CSV, Excel, Word, HTML, LaTeX) | 400% more |
-| **Manual formatting** | Required | Built-in | 100% automatic |
-| **Publication-ready output** | No (post-processing) | Yes (direct) | No extra work |
-| **Statistical tests** | Manual selection | Automatic | 100% hands-off |
-| **Learning curve** | Moderate | Minimal | Much simpler |
-| **Maintenance burden** | High | Low | 75% less |
-| **Time to final output** | 30 minutes | 5 minutes | 6x faster |
+| Aspect | Original | New |
+|--------|----------|-----|
+| **Function calls** | 3+ (table_one + manual post-processing steps) | 1 |
+| **Export formats** | 1 (CSV, via write.csv on a dataframe) | Several, via gtsummary (`as_gt`, `as_kable`, `as_flex_table`, `as_tibble`, `as_hux_table`, `as_hux_xlsx`, `as_kable_extra`; no `as_latex` — see note above) |
+| **Manual formatting** | Required | Built-in |
+| **Publication-ready output** | No (post-processing) | Yes (direct) |
+| **Statistical tests** | Manual selection | Automatic via `add_p()` |
+| **Maintenance burden** | Custom code across 4 files (825 lines total, see CODE_COMPARISON.md) | One file (`R/desp_table_gtsummary.R`, 397 lines) built on a maintained external package |
+
+No code-line-count "% reduction" or speed/time figures are given here —
+the ones in earlier drafts of this document (75% code reduction, 6x faster,
+30 vs. 5 minutes) could not be verified against anything in this repo and
+have been removed.
 
 ---
 
 ## Transition Benefit
 
-For users with existing code:
+For users with existing code: the positional call still works, verified
+against the current implementation and `dev-tests/test_backward_compat.R` --
+you do not have to change `table_one(df, sex, datadic = datadic)` to
+`table_one(df, group = sex, datadic = datadic)`, though the named form reads
+more clearly:
 
 ```r
-# Change this:
-tbl_old <- table_one(df, sex, datadic = datadic)
-
-# To this:
-tbl_new <- table_one(df, group = sex, datadic = datadic)
-
-# And gain all benefits of gtsummary!
+tbl_old_style <- table_one(df, sex, datadic = datadic)          # still works
+tbl_new_style <- table_one(df, group = sex, datadic = datadic)  # recommended
 ```
 
-That's it. The transition is minimal, but the benefits are massive.
+The output type is the main thing that changed: `table_one()` now returns a
+`tbl_summary`/`gtsummary` object rather than a dataframe. See
+`REPRODUCING_LEGACY_RESULTS.md` for the complete, verified list of behavior
+changes.

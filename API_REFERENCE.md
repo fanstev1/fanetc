@@ -2,20 +2,35 @@
 
 ## Function Signature
 
+Verified against `R/desp_table_gtsummary.R` on `master` (2026-07-09):
+
 ```r
 table_one(
   df,
-  group = NULL,
-  include = NULL,
+  group,
   datadic = NULL,
-  missing = "no",
-  missing_text = "Unknown",
+  var_name,
+  var_desp,
+  include,
+  missing = "ifany",
+  missing_text = "(Missing)",
+  missing_group_exclude = TRUE,
   add_p = NULL,
   add_overall = NULL,
   sort_by_p = FALSE,
+  continuous_stat = c("meansd", "mediqr"),
   pvalue_fun = format_pvalue
 )
 ```
+
+`group` and `include` are NSE (bare column name) arguments with no default —
+omit them for "no grouping" / "include everything" (passing `group = NULL`
+also works). `var_name`/`var_desp` let `datadic` use differently-named
+columns (default to `var_name`/`var_desp`, matching the pre-refactor API).
+`missing_group_exclude = TRUE` (default) drops rows with missing `group`; set
+`FALSE` to keep them as their own `missing_text`-labeled level instead.
+`continuous_stat` chooses `"meansd"` (mean/SD, t-test or ANOVA — the default)
+or `"mediqr"` (median/IQR, Wilcoxon or Kruskal-Wallis) for the whole table.
 
 ## Parameters
 
@@ -99,16 +114,16 @@ table_one(
 
 ### `missing`
 - **Type:** character
-- **Default:** `"no"`
+- **Default:** `"ifany"`
 - **Options:**
   - `"no"` - Never show missing count
-  - `"ifany"` - Show missing count only if any missing values present
+  - `"ifany"` - Show missing count only if any missing values present (default)
   - `"always"` - Always show missing count
 - **Description:** Controls display of missing data in the table
 - **Examples:**
   ```r
-  table_one(df, missing = "no")      # (default) Hide missing
-  table_one(df, missing = "ifany")   # Show if any present
+  table_one(df, missing = "ifany")   # (default) Show if any present
+  table_one(df, missing = "no")      # Hide missing
   table_one(df, missing = "always")  # Always show
   ```
 
@@ -116,7 +131,7 @@ table_one(
 
 ### `missing_text`
 - **Type:** character
-- **Default:** `"Unknown"`
+- **Default:** `"(Missing)"`
 - **Description:** Label for missing value rows
 - **Example:**
   ```r
@@ -219,7 +234,7 @@ table_one(
 ## Return Value
 
 ### Type
-`gtsummary_tbl_summary` object (inherits from `tbl_summary`)
+An object with class `c("tbl_summary", "gtsummary")` (verified via `class()`)
 
 ### Properties
 - Can be printed directly with `print()`
@@ -244,23 +259,28 @@ gtsummary::as_tibble(tbl)           # Dataframe
 ## Statistics Calculated
 
 ### Continuous Variables
-- **Primary statistic:** `mean ± SD`
-- **Secondary statistic:** `median (Q1 - Q3)`
-- **Decimal places:** Auto-determined based on data
+- **One statistic line per variable, chosen by `continuous_stat`:**
+  - `continuous_stat = "meansd"` (default): `mean ± SD`
+  - `continuous_stat = "mediqr"`: `median (Q1 – Q3)`
+  - Verified: `table_one()` does **not** show both mean/SD and median/IQR
+    rows for the same variable at once — earlier drafts of this doc (and of
+    EXAMPLES.md/BEFORE_AFTER_EXAMPLE.md) showed both, which does not match
+    the current implementation.
+- **Decimal places:** Auto-determined per variable via `decimalplaces()`
 
 ### Categorical Variables (including logical/binary)
 - **Statistic:** `n (%)` where n is count and % is percentage
-- **Decimal places:** 
-  - 0 if n < 200
-  - 1 if n ≥ 200
+- **Decimal places:** fixed regardless of sample size — n uses 0 decimals,
+  % uses 1 decimal (verified: a 300-row and a 50-row table both render
+  percentages like `150 (50.0%)` / `24 (48.0%)`)
 
 ### Statistical Tests (when `add_p = TRUE`)
-- **Continuous:**
-  - 2 groups: Student's t-test (unequal variance)
-  - >2 groups: One-way ANOVA
-- **Categorical:**
-  - Fisher's exact test
-  - Simulation-based p-values if exact computation infeasible
+- **Continuous:** depends on `continuous_stat`:
+  - `"meansd"`: Student's t-test, unequal variance (2 groups) or one-way
+    ANOVA (>2 groups)
+  - `"mediqr"`: Wilcoxon rank-sum test (2 groups) or Kruskal-Wallis (>2 groups)
+- **Categorical:** Fisher's exact test, always called with
+  `hybrid = TRUE, simulate.p.value = TRUE`
 
 ---
 
@@ -302,12 +322,15 @@ gtsummary::as_flex_table(tbl)  # For officer package
 # Markdown
 gtsummary::as_kable(tbl)
 
-# LaTeX
-gtsummary::as_latex(tbl)
-
 # Dataframe
 gtsummary::as_tibble(tbl)
 ```
+
+(Verified against gtsummary 2.1.0's exports: `as_flex_table`, `as_gt`,
+`as_gtsummary`, `as_hux_table`, `as_hux_xlsx`, `as_kable`, `as_kable_extra`,
+`as_tibble`. There is no `as_latex()` — for LaTeX output, go through
+`as_kable_extra()` or `as_gt()` and consult the current gtsummary/gt/kableExtra
+docs.)
 
 ### Extract Inline Statistics
 ```r
@@ -325,8 +348,10 @@ gtsummary::inline_text(tbl, variable = age, column = stat_1)
 - **Unknown types:** Converted or skipped
 
 ### Missing group values
-- Automatically removed from analysis
-- No error thrown, just silent filtering
+- By default (`missing_group_exclude = TRUE`), rows with a missing `group`
+  value are dropped, no error thrown
+- Set `missing_group_exclude = FALSE` to keep them instead, as their own
+  `missing_text`-labeled group level
 
 ### Non-matching data dictionary
 - Variables in df not in datadic: Use original names
@@ -339,31 +364,31 @@ gtsummary::inline_text(tbl, variable = age, column = stat_1)
 
 ---
 
-## Performance Notes
-
-- Scales well to 10,000+ rows
-- Typical render time: 200-500ms
-- Memory efficient: ~80MB for large dataframes
-- Automatic optimization for common cases
-
----
-
 ## Backward Compatibility Notes
 
-### From Original Implementation
-- **BREAKING:** `group` parameter must be named (was positional)
-- **BREAKING:** Returns object, not dataframe (use `as_tibble()`)
-- **COMPATIBLE:** `datadic` parameter works the same
-- **COMPATIBLE:** Logic simplified, results equivalent
+No benchmark suite exists for `table_one()` in this repo (`dev-tests/` only
+benchmarks `construct_surv_var()`/`construct_cmprisk_var()`), so this document
+no longer states specific timing/memory numbers for it — none could be
+verified.
 
-### Workarounds for Breaking Changes
+### From the Pre-Refactor Implementation
+- **Group parameter:** `group` is still accepted positionally —
+  `table_one(df, sex)` works exactly as before, verified against the current
+  code and by `dev-tests/test_backward_compat.R` / `test_api_compat.R`. Using
+  `group = sex` is recommended for clarity but is not required.
+- **BREAKING: return type.** `table_one()` now returns a `tbl_summary`/
+  `gtsummary` object instead of a plain dataframe. Use
+  `gtsummary::as_tibble()` to get a dataframe back.
+- **COMPATIBLE:** `datadic` parameter works the same.
+
+See `REPRODUCING_LEGACY_RESULTS.md` at the repo root for the full, diff-verified
+list of behavior changes versus the pre-refactor `fanetc_legacy` branch.
+
+### Workaround for the Return-Type Change
 ```r
 # Convert object to dataframe
 tbl <- table_one(df, group = sex)
 df_result <- gtsummary::as_tibble(tbl)
-
-# Use named group parameter
-table_one(df, group = sex)  # Not table_one(df, sex)
 ```
 
 ---

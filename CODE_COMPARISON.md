@@ -47,14 +47,18 @@ sum_table <- table_one(df, sex, datadic = datadic)
 # 4. Combines all results with suffix renaming
 ```
 
-**Code complexity (~800 lines across multiple functions)**
+**Code complexity:** the four files backing this (`desp_table.R`,
+`numeric_desp.R`, `logical_desp.R`, `factor_desp.R`, all removed from the
+repo — line counts below are from the last commit before the refactor,
+`7ab169b`) totaled 825 lines (127 + 271 + 150 + 277).
 
 ### gtsummary Implementation
 ```r
 sum_table <- table_one(df, group = sex, datadic = datadic, add_p = TRUE)
 ```
 
-**Code complexity (~50 lines, single function call)**
+**Code complexity:** the call site is one line; the implementation behind it
+(`R/desp_table_gtsummary.R`, current `master`) is 397 lines.
 
 ---
 
@@ -91,7 +95,9 @@ numeric_desp <- function(df, group) {
 }
 ```
 
-**~120 lines of code**
+(`numeric_desp.R` was 271 lines total, including the nested
+`two_sample_test()`/`k_sample_test()` helpers shown in Example 5 below —
+verified via `git show 7ab169b:R/numeric_desp.R | wc -l`)
 
 ### gtsummary Alternative
 ```r
@@ -131,17 +137,23 @@ logical_desp <- function(df, group) {
   # Custom fisher_test function implementation with error handling
 }
 
-# Plus 100+ lines of fisher_test() function
+# Plus the nested fisher_test() function
 ```
 
-**~200+ lines of code**
+(`logical_desp.R` was 150 lines total — verified via
+`git show 7ab169b:R/logical_desp.R | wc -l`)
 
 ### gtsummary Alternative
 ```r
-# Logical variables are automatically converted to categorical
-type = list(all_logical() ~ "categorical")
+# Logical variables need no special declaration: gtsummary auto-detects them
+# and maps them to its built-in "dichotomous" type (the actual code in
+# R/desp_table_gtsummary.R uses
+#   type = list(all_categorical(dichotomous = FALSE) ~ "categorical",
+#               all_dichotomous() ~ "dichotomous")
+# there is no all_logical() selector in gtsummary -- an earlier draft of
+# this doc used one, but it is not an exported function)
 
-# Fisher's test is automat automatically applied via add_p()
+# Fisher's test is applied automatically via add_p()
 gtsummary::add_p(test = list(
   all_categorical() ~ "fisher.test"
 ))
@@ -173,7 +185,9 @@ fisher_test <- if (n_groups(df)==2) {
 pval = format_pvalue(pval)
 ```
 
-**~150 lines of custom test logic**
+(This test-selection logic was spread across `numeric_desp.R` and
+`logical_desp.R`; no reliable way to isolate an exact line count for just
+this piece was found, so no specific number is given here.)
 
 ### gtsummary: Automatic Test Selection
 ```r
@@ -186,7 +200,7 @@ gtsummary::add_p(
 )
 ```
 
-**~8 lines, all logic handled by gtsummary**
+**All test-selection logic handled by gtsummary in a single `add_p()` call**
 
 ---
 
@@ -242,19 +256,6 @@ gtsummary::as_tibble(tbl)              # Dataframe
 
 ---
 
-## Performance Comparison
-
-| Operation | Original | gtsummary |
-|-----------|----------|-----------|
-| Basic table (100 rows, 5 vars) | ~500ms | ~200ms |
-| With grouping (2 groups) | ~800ms | ~250ms |
-| With tests (Fisher + t-tests) | ~1500ms | ~400ms |
-| Memory (large dataframe) | ~150MB | ~80MB |
-
-*gtsummary is generally faster and more memory-efficient*
-
----
-
 ## Error Handling
 
 ### Original: Manual Try-Catch
@@ -286,12 +287,16 @@ return(res)
 ```
 
 ### gtsummary Output (Multiple Formats Available)
+
+Verified: `table_one()` shows one continuous-stat row per variable, not both
+mean/SD and median/IQR (controlled by the `continuous_stat` argument, default
+`"meansd"`):
+
 ```
 | **Characteristic** | **Female**, n=113 | **Male**, n=100 | **p-value** |
 |---|---|---|---|
-| Income, mean ± SD | 565 ± 289 | 543 ± 301 | 0.31 |
-| Income, median (Q1-Q3) | 512 (345-761) | 489 (312-798) | 0.29 |
-| Sex, n (%) | | | <0.01 |
+| Income | 565 ± 289 | 543 ± 301 | 0.31 |
+| Sex | | | <0.01 |
 | Female | 45 (50%) | 68 (68%) | |
 | Male | 45 (50%) | 32 (32%) | |
 ...

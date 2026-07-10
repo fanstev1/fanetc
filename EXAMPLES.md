@@ -21,18 +21,19 @@ df <- data.frame(
 tbl1 <- table_one(df)
 print(tbl1)
 
-# Output will show:
+# Output will show one row per continuous variable (mean +/- SD, since the
+# default continuous_stat = "meansd"; pass continuous_stat = "mediqr" for
+# median (Q1-Q3) instead -- table_one() shows one or the other, not both):
 # Characteristic           N = 100
-# Age, mean ± SD            50 ± 15
-# Age, median (Q1-Q3)       49 (38-62)
-# Weight, mean ± SD         75 ± 20
-# ...
-# Gender, n (%)
-#   Male                    52 (52%)
-#   Female                  48 (48%)
-# Smoker, n (%)
-#   TRUE                    48 (48%)
-#   FALSE                   52 (52%)
+# age                       50 +/- 16
+# weight                    73 +/- 18
+# height                    170 +/- 10
+# gender
+#   Female                  51 (51.0%)
+#   Male                    49 (49.0%)
+# smoker                    49 (49.0%)   <- logical vars render as ONE
+# diabetes                  50 (50.0%)      dichotomous row (count of TRUE),
+#                                           not separate TRUE/FALSE rows
 ```
 
 ---
@@ -137,11 +138,12 @@ tbl4 <- tbl4 %>%
     all_stat_cols() ~ "Mean ± SD (continuous), n (%) (categorical)"
   )
 
-# Add title and subtitle
+# Bold the label column (modify_table_styling() has no `bold` argument --
+# verified; the correct argument is `text_format = "bold"`)
 tbl4 <- tbl4 %>%
   gtsummary::modify_table_styling(
     columns = label,
-    bold = TRUE
+    text_format = "bold"
   )
 
 print(tbl4)
@@ -246,7 +248,10 @@ df_missing <- df %>%
   mutate(
     age = ifelse(runif(n()) < 0.1, NA, age),
     weight = ifelse(runif(n()) < 0.05, NA, weight),
-    treatment_response = sample(c("Yes", "No", NA), n(), replace = TRUE)
+    # must be a factor: table_one() silently drops character columns
+    # (verified -- a character treatment_response column does not appear
+    # in the output table at all), so wrap it in factor() to summarize it
+    treatment_response = factor(sample(c("Yes", "No", NA), n(), replace = TRUE))
   )
 
 # Show missing data
@@ -281,11 +286,11 @@ print(tbl10)
 ## Example 11: Sorted by P-value
 
 ```r
-# Create table and sort by p-value (most significant first)
-tbl11 <- table_one(df, group = treatment, add_p = TRUE) %>%
-  gtsummary::modify_rows_print(
-    rows = order(.data$p.value, na.last = TRUE)
-  )
+# table_one() has a dedicated sort_by_p argument (verified working; it calls
+# gtsummary::sort_p() internally). There is no modify_rows_print() in
+# gtsummary 2.1.0 -- an earlier draft of this example referenced it, but it
+# is not an exported function.
+tbl11 <- table_one(df, group = treatment, add_p = TRUE, sort_by_p = TRUE)
 
 print(tbl11)
 # Variables with smallest p-values appear first

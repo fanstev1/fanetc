@@ -2,105 +2,87 @@
 
 ## Executive Summary
 
-The `table_one()` function and its supporting functions have been completely refactored to use the `gtsummary` package. This modernization provides:
+The `table_one()` function and its supporting functions (`numeric_desp()`,
+`logical_desp()`, `factor_desp()`, `factor_dist()`, `two_sample_test()`,
+`k_sample_test()`, `fisher_test()`) have been replaced with a rewrite built
+on the `gtsummary` package. This is merged to `master` (commit `1eaae1c`,
+2026-07-09) — not a proposal.
 
-- **75% code reduction** (800 lines → 200 lines)
-- **Simplified maintenance** (5 functions → 1 main function)
-- **Enhanced functionality** (multiple export formats, automatic formatting)
-- **Better statistical practices** (leverages validated gtsummary tests)
-- **Professional output** (publication-ready tables)
+- **Verified code reduction:** 825 lines across 4 files (the pre-refactor
+  `desp_table.R`, `numeric_desp.R`, `logical_desp.R`, `factor_desp.R`, all
+  removed from the repo) → 397 lines in 1 file
+  (`R/desp_table_gtsummary.R`), a 52% reduction. (An earlier draft of this
+  document claimed "75%, 800 → 200 lines" — neither number matched the
+  actual files once checked against `git show 7ab169b:R/<file> | wc -l` and
+  the current `wc -l`.)
+- **Simplified maintenance:** several standalone functions consolidated into
+  one function built on a maintained external package.
+- **Enhanced functionality:** more export formats, automatic formatting.
+- **Better statistical practices:** leverages gtsummary's test selection and
+  formatting instead of hand-rolled `try()`-wrapped test logic.
+
+No performance/memory benchmark exists for `table_one()` anywhere in this
+repo (`dev-tests/` only benchmarks `construct_surv_var()` and
+`construct_cmprisk_var()`), so this document makes no runtime-speed or
+memory claims — earlier drafts had a specific ms/MB table that could not be
+reproduced or traced to any actual measurement and has been removed.
 
 ## What Was Changed
 
-### Original Implementation
+### Pre-Refactor Implementation (removed; line counts verified via
+`git show 7ab169b:R/<file> | wc -l`)
 ```
-R/desp_table.R (345 lines)
+R/desp_table.R (127 lines)
 ├── table_one() - Main orchestrator
-├── numeric_desp() - Manual numeric summaries
-├── factor_desp() - Manual factor summaries
-└── factor_dist() - Helper for factor distribution
+└── (dispatched to the functions below)
 
-R/numeric_desp.R (250 lines)
+R/numeric_desp.R (271 lines)
 ├── numeric_desp() - Numeric variable statistics
-├── n_avail() - Count non-missing values
-├── mean_sd() - Format mean/SD
-├── med_iqr() - Format median/IQR
 ├── two_sample_test() - Manual 2-group testing
 └── k_sample_test() - Manual k-group testing
+(n_avail(), mean_sd(), med_iqr() live in fan_util_fun.R and are still
+exported today, unchanged in purpose)
 
 R/logical_desp.R (150 lines)
 ├── logical_desp() - Logical variable statistics
 └── fisher_test() - Manual Fisher's exact test
 
-R/factor_desp.R (200 lines)
+R/factor_desp.R (277 lines)
 ├── factor_desp() - Factor variable statistics
 └── factor_dist() - Cross-tabulation with tests
 ```
 
-**Total: ~945 lines across 4 files**
+**Total: 825 lines across 4 files**
 
-### New Implementation
+### Current Implementation
 ```
-R/desp_table_gtsummary.R (200 lines)
+R/desp_table_gtsummary.R (397 lines, current master)
 ├── table_one() - Single unified function
 ├── format_pvalue() - P-value formatting
-├── mean_sd() - Format mean/SD (helper)
-├── med_iqr() - Format median/IQR (helper)
-└── n_avail() - Count non-missing (helper)
+└── mean_sd(), med_iqr(), n_avail() - helpers (also used elsewhere)
 ```
 
-**Total: ~200 lines in 1 file**
+**Total: 397 lines in 1 file**
 
-## Files Created
+## Related Documentation
 
-### 1. **desp_table_gtsummary.R**
-- New implementation of `table_one()` using gtsummary
-- Simplified function signature
-- Comprehensive documentation with roxygen2 tags
-- Helper functions for compatibility
+- **REPRODUCING_LEGACY_RESULTS.md** — the diff-verified list of behavior
+  changes vs. the pre-refactor `fanetc_legacy` branch; treat this as
+  authoritative over anything below that overlaps with it.
+- **CODE_COMPARISON.md** — side-by-side old/new code snippets.
+- **EXAMPLES.md** — usage examples, checked against the current function.
+- **API_REFERENCE.md** — full parameter documentation.
+- **QUICKREF.md** — quick lookup / troubleshooting.
 
-### 2. **MIGRATION_GUIDE.md**
-- Detailed explanation of changes
-- Function usage comparisons
-- Breaking changes and workarounds
-- Integration steps
-- Benefits summary
-
-### 3. **CODE_COMPARISON.md**
-- Side-by-side code examples
-- Before/after for each function
-- Performance metrics
-- Error handling improvements
-- Output format changes
-
-### 4. **EXAMPLES.md**
-- 12 practical examples covering:
-  - Basic usage
-  - Grouped comparisons
-  - Data dictionary usage
-  - Custom formatting
-  - Multiple export formats
-  - Stratified analysis
-
-### 5. **API_REFERENCE.md**
-- Complete parameter documentation
-- Return value specifications
-- Statistics calculated
-- Common operations
-- Error handling
-- Performance notes
-
-### 6. **QUICKREF.md**
-- Quick reference checklist
-- Common customizations
-- Quick examples
-- Troubleshooting table
-- Migration checklist
+(`MIGRATION_GUIDE.md` existed as an earlier draft of a step-by-step "how to
+migrate" guide; it was deleted during this audit as redundant with
+REPRODUCING_LEGACY_RESULTS.md, and its unique content — a `gtsummary::add_stat()`
+Q&A snippet — did not actually run against the current gtsummary version.)
 
 ## Key Improvements
 
 ### 1. Code Simplicity
-**Before:** Complex nested operations across multiple functions
+**Before:** manual dispatch and binding across multiple functions
 ```r
 num_out_lst <- numeric_desp(df, !!group)
 fct_out_lst <- factor_desp(df, !!group)
@@ -110,276 +92,108 @@ out_lst <- num_out_lst %>%
   append(logic_out_lst)
 ```
 
-**After:** Single function call
+**After:** single function call
 ```r
 tbl <- table_one(df, group = sex)
 ```
 
 ### 2. Statistical Testing
-**Before:** Manual test selection
-```r
-test_fun <- if (n_groups(df)==2) two_sample_test else k_sample_test
-# Plus 50+ lines of custom test logic
-```
+**Before:** manual test selection (in `numeric_desp()`/`logical_desp()`)
 
-**After:** Automatic via gtsummary
+**After:** automatic via gtsummary, verified against `R/desp_table_gtsummary.R`:
 ```r
 gtsummary::add_p(
   test = list(
-    all_continuous() ~ "t.test",
+    all_continuous() ~ "t.test",       # or "wilcox.test" if continuous_stat = "mediqr"
     all_categorical() ~ "fisher.test"
   )
 )
 ```
 
 ### 3. Output Flexibility
-**Before:** Dataframe only
-```r
-out <- bind_rows(out_lst) %>% # Rows/columns manually constructed
-  select(row_id, variable, type, ...) %>%
-  mutate(type = ifelse(...))
-```
+**Before:** dataframe only (manually constructed columns)
 
-**After:** Multiple formats
+**After:** multiple formats (verified against gtsummary 2.1.0's actual
+exports — `as_latex()` does **not** exist, despite appearing in earlier
+drafts of this document):
 ```r
 tbl <- table_one(df, group = sex)
 gtsummary::as_gt(tbl)           # HTML
 gtsummary::as_kable(tbl)        # Markdown
 gtsummary::as_flex_table(tbl)   # Word
 gtsummary::as_tibble(tbl)       # Dataframe
+gtsummary::as_hux_table(tbl)    # huxtable
+gtsummary::as_kable_extra(tbl)  # kableExtra (can go to LaTeX from here)
 ```
 
 ### 4. Automatic Variable Type Detection
-**Before:** Separate functions needed
-- `select_if(is.numeric)` → numeric_desp()
-- `select_if(is.factor)` → factor_desp()
-- `select_if(is.logical)` → logical_desp()
+**Before:** separate `select_if(is.numeric)`/`is.factor`/`is.logical` dispatch
 
-**After:** Automatic
-```r
-gtsummary::tbl_summary()  # Detects all types automatically
-```
+**After:** automatic via `gtsummary::tbl_summary()`. Note: logical variables
+render as a single "dichotomous" row (the count of `TRUE`), not one row per
+level — verified by running the function.
 
 ### 5. P-value Formatting
-**Before:** Custom implementation with multiple conditions
-```r
-p[large] <- base::format.pval(x[large], digits= 1, eps= 0.1995, ...)
-p[!large] <- base::format.pval(x[!large], digits= 1, eps= eps, ...)
-```
+**Before:** custom implementation with multiple conditions in `fan_util_fun.R`
 
-**After:** Pass function to gtsummary
+**After:** unchanged formatting logic (`format_pvalue()` is still exported
+and still used the same way), just passed straight to gtsummary:
 ```r
 table_one(df, group = sex, pvalue_fun = format_pvalue)
 ```
 
 ## Functional Equivalence
 
-### Feature Parity
-
-| Feature | Original | New | Status |
-|---------|----------|-----|--------|
-| Numeric summaries (mean/SD, median/IQR) | ✓ | ✓ | ✓ |
-| Factor summaries (n, %) | ✓ | ✓ | ✓ |
-| Logical/binary summaries | ✓ | ✓ | ✓ |
-| Group comparisons | ✓ | ✓ | ✓ |
-| Statistical tests (t-test, Wilcox, Fisher) | ✓ | ✓ | ✓ |
-| P-value formatting | ✓ | ✓ | ✓ |
-| Data dictionary support | ✓ | ✓ | ✓ |
-| Missing data handling | ✓ | ✓ | ✓ |
-| **New: HTML export** | ✗ | ✓ | Enhanced |
-| **New: Word export** | ✗ | ✓ | Enhanced |
-| **New: LaTeX export** | ✗ | ✓ | Enhanced |
-| **New: Inline statistics** | ✗ | ✓ | Enhanced |
-| **New: Custom formatting** | ✗ | ✓ | Enhanced |
-
-### Output Comparison
-
-| Aspect | Original | New |
-|--------|----------|-----|
-| Return type | dataframe | tbl_summary object |
-| Default display | Raw dataframe | Formatted table |
-| Headers | Plain | Auto-formatted bold headers |
-| P-values | Plain text | Formatted according to pvalue_fun |
-| Variable names | Original or from dict | Smart detection |
-| Overall column | Manual addition | Auto-add if grouped |
+| Feature | Pre-refactor | Current |
+|---------|----------|-----|
+| Numeric summaries | mean/SD *and* median/IQR shown together | One or the other per table, chosen via `continuous_stat` (verified — `table_one()` does not show both at once) |
+| Factor summaries (n, %) | yes | yes |
+| Logical/binary summaries | yes (TRUE/FALSE rows) | yes, but as a single dichotomous row, not two rows |
+| Group comparisons | yes | yes |
+| Statistical tests (t-test, Wilcoxon, Fisher) | yes | yes, same tests, auto-selected |
+| P-value formatting | yes | yes, same `format_pvalue()` |
+| Data dictionary support | yes | yes, same `var_name`/`var_desp` column convention |
+| Missing data handling | yes | yes, plus a new `missing_group_exclude` option |
+| HTML/Word/Markdown export | no (CSV only) | yes |
+| Inline statistics (`inline_text()`) | no | yes |
 
 ## Breaking Changes
 
-### 1. Group Parameter Must Be Named
-```r
-# OLD (no longer works)
-table_one(df, sex)
+See **REPRODUCING_LEGACY_RESULTS.md** for the complete, diff-verified list.
+Summary:
 
-# NEW (required)
-table_one(df, group = sex)
-```
+1. **Return type changed.** `table_one()` now returns a `tbl_summary`/
+   `gtsummary` object, not a dataframe. Use `gtsummary::as_tibble()` to get a
+   dataframe back.
+2. **`library(fanetc)` no longer attaches other packages** (DESCRIPTION has
+   no `Depends`, only `Imports`). Scripts relying on `fanetc` to attach
+   `dplyr`/`ggplot2`/etc. need their own `library()` calls now.
+3. **8 functions removed**: `numeric_desp()`, `logical_desp()`,
+   `factor_desp()`, `factor_dist()`, `two_sample_test()`, `k_sample_test()`,
+   `fisher_test()`, `recode_missing()`.
+4. `construct_surv_var()`/`construct_cmprisk_var()` had two edge-case bugs
+   fixed, which can change *numeric results*, not just types, for affected
+   rows.
 
-### 2. Return Type Changed
-```r
-# OLD
-tbl <- table_one(df)  # dataframe
-write.csv(tbl, "table.csv")
-
-# NEW
-tbl <- table_one(df)  # tbl_summary object
-gtsummary::as_tibble(tbl) %>% write.csv("table.csv")
-```
-
-### 3. Removed Functions (No Longer Needed)
-- `numeric_desp()` - Use `table_one()`
-- `logical_desp()` - Use `table_one()`
-- `factor_desp()` - Use `table_one()`
-- `factor_dist()` - Use `table_one()`
-- `two_sample_test()` - Use `gtsummary::add_p()`
-- `k_sample_test()` - Use `gtsummary::add_p()`
-- `fisher_test()` - Use `gtsummary::add_p()`
-
-### 4. Potential Issues with Downstream Code
-- Any code expecting dataframe output needs updating
-- Custom post-processing may need gtsummary equivalents
-- Direct dataframe manipulation should use `as_tibble()` first
-
-## Migration Checklist
-
-- [ ] **Review** MIGRATION_GUIDE.md for full context
-- [ ] **Backup** original R files
-- [ ] **Install** gtsummary package
-- [ ] **Update** DESCRIPTION with gtsummary dependency
-- [ ] **Replace** old desp_table.R with desp_table_gtsummary.R
-- [ ] **Test** basic usage: `table_one(df)`
-- [ ] **Test** grouped: `table_one(df, group = sex)`
-- [ ] **Test** with data dictionary
-- [ ] **Update** all function calls in R package
-- [ ] **Test** export to different formats
-- [ ] **Update** any R Markdown documents using old function
-- [ ] **Document** any custom post-processing updates needed
-- [ ] **Run** full test suite
-- [ ] **Update** package version number
-- [ ] **Deploy** and monitor for issues
-
-## Installation & Setup
-
-### 1. Install gtsummary
-```r
-install.packages("gtsummary")
-```
-
-### 2. Update DESCRIPTION
-```yaml
-Package: fanetc
-...
-Depends: 
-  gtsummary,
-  tidyverse,
-  rlang,
-  forcats
-...
-```
-
-### 3. Update R Files
-- Keep backup of old files
-- Replace desp_table.R with desp_table_gtsummary.R
-- Remove old numeric_desp.R, logical_desp.R, factor_desp.R files
-
-### 4. Test Installation
-```r
-# Test in R
-library(fanetc)
-df <- data.frame(x = rnorm(100), g = factor(rep(c("A", "B"), 50)))
-table_one(df, group = g)
-```
-
-## Performance Comparison
-
-| Operation | Original | New | Speedup |
-|-----------|----------|-----|---------|
-| 100 rows, 5 vars | 500ms | 200ms | 2.5x |
-| 100 rows, 10 vars | 1200ms | 350ms | 3.4x |
-| 1000 rows, 20 vars | 3500ms | 800ms | 4.4x |
-| With tests (2 group) | 2000ms | 450ms | 4.4x |
-| With tests (3 groups) | 3000ms | 700ms | 4.3x |
-
-**Memory:** 150MB (original) → 80MB (new)
+**Not a breaking change, despite earlier drafts of this document saying
+otherwise:** the `group` parameter did **not** need to become a required
+named argument. `table_one(df, sex)` (positional) still works today,
+verified against the current code and `dev-tests/test_backward_compat.R`.
 
 ## Benefits Realized
 
-### Immediate
-1. **Reduced maintenance burden** (800 → 200 lines)
-2. **Fewer bugs** (less custom code, validated library)
-3. **Better performance** (optimized algorithms)
-4. **Multiple export formats** (HTML, Word, LaTeX)
-
-### Long-term
-1. **Leverage gtsummary ecosystem** (new features via package updates)
-2. **Community support** (uses widely-adopted package)
-3. **Standards compliance** (follows statistical best practices)
-4. **Scalability** (handles any size dataframe efficiently)
-
-## Documentation Provided
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| MIGRATION_GUIDE.md | How to migrate | Developers |
-| CODE_COMPARISON.md | What changed | Developers |
-| EXAMPLES.md | How to use | End users |
-| API_REFERENCE.md | Complete reference | Developers |
-| QUICKREF.md | Quick lookup | All users |
-| This file | Overview | All users |
-
-## Next Steps
-
-### For Implementation
-1. Review all documentation
-2. Back up original files
-3. Install gtsummary
-4. Update DESCRIPTION
-5. Replace function file
-6. Run test suite
-7. Update dependent code
-8. Deploy
-
-### For Enhancement
-1. Add custom statistics layers
-2. Extend with additional test options
-3. Create wrapper functions for common use cases
-4. Build domain-specific templates
-
-## Backward Compatibility
-
-### Soft Compatibility (with workarounds)
-- Existing analysis code can be updated to work with new function
-- Most functionality is preserved with minor syntax changes
-
-### Hard Incompatibilities (require updates)
-- Positional `group` argument → must use named `group = `
-- Dataframe output → must use `as_tibble()` for raw data
-- Custom post-processing → may need gtsummary equivalents
-
-## Support Resources
-
-### Documentation
-- [gtsummary website](https://www.danieldsjoberg.com/gtsummary/)
-- [gtsummary GitHub](https://github.com/ddsjoberg/gtsummary)
-- Included documentation (MIGRATION_GUIDE.md, EXAMPLES.md, API_REFERENCE.md)
-
-### Quick Examples
-See EXAMPLES.md for 12 practical examples covering most use cases
-
-### Troubleshooting
-See QUICKREF.md for common issues and solutions
+1. **Reduced maintenance burden**: 825 → 397 lines, in one file instead of four.
+2. **Fewer bugs**: two known pre-refactor edge-case bugs in
+   `construct_surv_var()`/`construct_cmprisk_var()` were fixed as part of
+   this overall effort (see REPRODUCING_LEGACY_RESULTS.md).
+3. **More export formats**: HTML, Word, Markdown, huxtable, kableExtra (see
+   above for the verified list — no direct LaTeX export function).
+4. **Leverages the gtsummary ecosystem** going forward instead of
+   hand-maintained statistical test logic.
 
 ---
 
-## Questions & Feedback
-
-For specific questions:
-1. Check API_REFERENCE.md for detailed parameter documentation
-2. See EXAMPLES.md for usage patterns
-3. Review MIGRATION_GUIDE.md for implementation details
-4. Check gtsummary documentation for advanced features
-
----
-
-**Refactoring completed:** March 2026
-**Status:** Ready for migration
-**Compatibility:** See MIGRATION_GUIDE.md for breaking changes
+**Refactoring merged:** 2026-07-09 (commit `1eaae1c`).
+**Status:** Complete and in use on `master`.
+**Compatibility:** See REPRODUCING_LEGACY_RESULTS.md for the verified list of
+breaking changes and how to reproduce pre-refactor results if needed.
