@@ -54,7 +54,7 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
         dimnames = list(time.list, strata_lab)
       )
 
-    # wide, plain data.frame (time + one integer column per stratum) — the shape
+    # wide, plain data.frame (time + one integer column per stratum) -- the shape
     # add_atrisk() consumes
     atRiskPts <- replace(atRiskPts, is.na(atRiskPts), 0)
     storage.mode(atRiskPts) <- "integer"
@@ -567,6 +567,8 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @param print_fig a logical parameter indicating whether the figure should be printed to the active device.
 #' @return A ggplot object.
 #' @examples
+#' \dontrun{
+#' # requires internet access to fetch the example dataset
 #' my_plot_theme<- theme_bw() +
 #' theme(axis.title  = element_text(size= 14, family="Arial"),
 #'       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
@@ -623,6 +625,7 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' gt <- ggplot_gtable(ggplot_build(p))
 #' gt$layout$clip[gt$layout$name == 'panel'] <- "off"
 #' grid.draw(gt)
+#' }
 #' @export
 show_cif<- function(surv_obj,
                     evt_type = 1,

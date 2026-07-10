@@ -54,7 +54,7 @@ value are excluded; if FALSE, they are kept as an explicit factor level named
 \item{sort_by_p}{Logical. Sort rows by p-value (default: FALSE)}
 
 \item{continuous_stat}{One of "meansd" or "mediqr". 
-"meansd" gives mean ± SD; "mediqr" gives median (Q1 - Q3).}
+"meansd" gives mean +/- SD; "mediqr" gives median (Q1 - Q3).}
 
 \item{pvalue_fun}{Function to format p-values (default: format_pvalue)}
 }
@@ -73,7 +73,7 @@ statistical tests based on the number of groups:
 
 **For continuous variables** (test follows the chosen \code{continuous_stat}):
 - \code{continuous_stat = "meansd"}: Welch t-test (2 groups) or one-way ANOVA (>2 groups);
-  summary statistic is Mean ± SD
+  summary statistic is Mean +/- SD
 - \code{continuous_stat = "mediqr"}: Wilcoxon rank-sum test (2 groups) or Kruskal-Wallis
   test (>2 groups); summary statistic is Median (Q1 - Q3), using type-1 quantiles
 - Decimal places automatically match the variable's actual precision using decimalplaces()

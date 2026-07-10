@@ -49,7 +49,12 @@ test_that("show_cif() runs end-to-end against a real (s0)-labeled survfitms obje
 # ---- Bug 3: show_cif()'s roxygen docs must cover every formal argument (no leftover copy-paste gaps) ----
 
 test_that("show_cif: @param docs cover exactly the formal arguments (no gaps, no stray entries)", {
-  src <- readLines(file.path(pkg_root, "R", "event_time_desp.R"))
+  # Reads the roxygen source comments directly, so this only makes sense from a source
+  # checkout -- skip (don't fail) when running against an installed package, e.g. under
+  # R CMD check, where R/event_time_desp.R's raw text isn't guaranteed to be present.
+  src_file <- file.path(pkg_root, "R", "event_time_desp.R")
+  skip_if_not(file.exists(src_file), "source file not available (not running from a source checkout)")
+  src <- readLines(src_file)
   title_line <- grep("^#' @title show_cif$", src)
   fn_line <- grep("^show_cif<- function", src)
   block <- src[title_line:fn_line]

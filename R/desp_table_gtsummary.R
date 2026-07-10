@@ -14,7 +14,7 @@
 #'
 #' **For continuous variables** (test follows the chosen \code{continuous_stat}):
 #' - \code{continuous_stat = "meansd"}: Welch t-test (2 groups) or one-way ANOVA (>2 groups);
-#'   summary statistic is Mean ± SD
+#'   summary statistic is Mean +/- SD
 #' - \code{continuous_stat = "mediqr"}: Wilcoxon rank-sum test (2 groups) or Kruskal-Wallis
 #'   test (>2 groups); summary statistic is Median (Q1 - Q3), using type-1 quantiles
 #' - Decimal places automatically match the variable's actual precision using decimalplaces()
@@ -47,7 +47,7 @@
 #' @param add_overall Logical. Add column with overall statistics (default: TRUE if group specified)
 #' @param sort_by_p Logical. Sort rows by p-value (default: FALSE)
 #' @param continuous_stat One of "meansd" or "mediqr". 
-#'        "meansd" gives mean ± SD; "mediqr" gives median (Q1 - Q3).
+#'        "meansd" gives mean +/- SD; "mediqr" gives median (Q1 - Q3).
 #' @param pvalue_fun Function to format p-values (default: format_pvalue)
 #'
 #' @return A tbl_summary object (gtsummary class) that can be further modified or converted to other formats
@@ -163,9 +163,9 @@ table_one <- function(df,
   # gtsummary requires glue strings for statistics; med_q1_q3 uses type-1
   # quantiles to match the historical med_iqr() output
   continuous_glue <- if (continuous_stat == "meansd") {
-    "{mean} ± {sd}"
+    "{mean} \u00B1 {sd}"
   } else {
-    "{median_type1} ({q1_type1} – {q3_type1})"
+    "{median_type1} ({q1_type1} \u2013 {q3_type1})"
   }
   n_continuous_stats <- if (continuous_stat == "meansd") 2L else 3L
 
@@ -336,7 +336,7 @@ format_pvalue <- function(x, eps = 0.001, trim = TRUE,
 #' @title mean_sd
 #' @description Format mean and standard deviation
 #' @param x Numeric variable
-#' @return Character string with formatted mean ± SD
+#' @return Character string with formatted mean +/- SD
 #' @export
 mean_sd <- function(x) {
   if (length(x[!is.na(x)]) == 0) {
@@ -351,7 +351,7 @@ mean_sd <- function(x) {
       s <- sd(x, na.rm = TRUE)
       return(paste0(
         formatC(m, digits = dec, format = "f"),
-        " ± ",
+        " \u00B1 ",
         formatC(s, digits = dec, format = "f")
       ))
     }

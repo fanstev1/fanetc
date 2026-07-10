@@ -43,6 +43,8 @@ end of follow-up. Events at time zero are set to 0.5 with a warning; negative
 times are set to NA with a warning, and the offending rows are printed.
 }
 \examples{
+library(magrittr)
+library(dplyr)
 set.seed(0)
 nn<- 100
 test<- data.frame(idx_dt= as.Date("1970-01-01"),

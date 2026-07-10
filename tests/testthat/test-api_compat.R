@@ -41,8 +41,11 @@ build_old_env <- function() {
 }
 
 get_exports <- function() {
-  exports <- grep("^export\\(", readLines(file.path(pkg_root, "NAMESPACE")), value = TRUE)
-  gsub("^export\\(|\\)$", "", exports)
+  # Reads the already-loaded package's namespace metadata rather than parsing the
+  # raw NAMESPACE file: works whether tests run from a source checkout (devtools::test())
+  # or against an installed package (R CMD check), where pkg_root's NAMESPACE text file
+  # isn't guaranteed to be present at this relative path.
+  getNamespaceExports("fanetc")
 }
 
 removed_on_purpose <- c("factor_desp", "factor_dist", "fisher_test", "k_sample_test",

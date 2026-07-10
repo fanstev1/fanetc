@@ -15,6 +15,8 @@
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
 #' @return The input data plus censored time-to-event variables.
 #' @examples
+#' library(magrittr)
+#' library(survival)
 #' aml %>% admin_censor_surv(evt_time= time, evt= status) # No admin censoring
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30)
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
@@ -67,8 +69,11 @@ admin_censor_surv <- function(df, evt_time, evt, adm_cnr_time = NULL, overwrite_
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
 #' @return The input data plus censored time-to-event variables.
 #' @examples
+#' \dontrun{
+#' # requires internet access to fetch the example dataset
 #' cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 #' admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+#' }
 #' @export
 admin_censor_cmprisk <- function(df, evt_time, evt, adm_cnr_time = NULL, evt_label = NULL, overwrite_var = FALSE) {
   evt_time <- enquo(evt_time)

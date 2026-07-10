@@ -82,6 +82,8 @@ show_cif
 The function shows the cumulative incidence function for competing risks with and without strata.
 }
 \examples{
+\dontrun{
+# requires internet access to fetch the example dataset
 my_plot_theme<- theme_bw() +
 theme(axis.title  = element_text(size= 14, family="Arial"),
       axis.title.x= element_text(margin= unit(c(t= 1, r = 0, b = 0, l = 0), "lines"), family="Arial"),
@@ -138,4 +140,5 @@ admin_censor_cmprisk(ftime, status,
 gt <- ggplot_gtable(ggplot_build(p))
 gt$layout$clip[gt$layout$name == 'panel'] <- "off"
 grid.draw(gt)
+}
 }

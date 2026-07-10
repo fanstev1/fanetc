@@ -42,6 +42,8 @@ fix_nonpositive_times <- function(time2evt, diag_df) {
 #' @param append if TRUE, the new variables are appended to the input data
 #' @return A data frame with patid, evt_time and evt (or the input data plus the new variables when append = TRUE).
 #' @examples
+#' library(magrittr)
+#' library(dplyr)
 #' set.seed(0)
 #' nn<- 100
 #' test<- data.frame(idx_dt= as.Date("1970-01-01"),

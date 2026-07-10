@@ -5,6 +5,8 @@ Version: 0.1.0
 Author: Chun-Po Steve Fan
 Maintainer: Chun-Po Steve Fan <chunpo.fan@gmail.com>
 Description: Miscellaneous functions that Steve wrote to facilitate TRCP data analysis project.
+Depends:
+    R (>= 3.5.0)
 Imports:
     broom (>= 1.0.5),
     cardx,

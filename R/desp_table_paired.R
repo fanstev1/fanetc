@@ -185,7 +185,7 @@
 #'   via \code{stats::mcnemar.test()} on the union-of-levels square table.
 #'
 #' **SMD**, selected by \code{pairing_method}:
-#' - \code{"matching"}: marginal (pooled-variance) SMD via \code{smd::smd()} —
+#' - \code{"matching"}: marginal (pooled-variance) SMD via \code{smd::smd()} --
 #'   the conventional matched-cohort balance metric.
 #' - \code{"repeated_measure"}: Cohen's d_z (within-pair mean difference divided
 #'   by the within-pair SD of differences) for continuous variables; categorical

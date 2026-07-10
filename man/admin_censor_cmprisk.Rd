@@ -39,6 +39,9 @@ The original variables can be overwritten by specifying overwrite_var= TRUE. Ove
 not recommended, but it can be useful in some situation.
 }
 \examples{
+\dontrun{
+# requires internet access to fetch the example dataset
 cmprisk_df<- read.csv2("http://www.stat.unipg.it/luca/misc/bmt.csv")
 admin_censor_cmprisk(cmprisk_df, ftime, status, evt_label = c("0"= "Event free", "1"= "Event", "2"= "Competing event"), adm_cnr_time= 10)
+}
 }

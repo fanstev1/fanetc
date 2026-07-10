@@ -10,7 +10,7 @@ mean_sd(x)
 \item{x}{Numeric variable}
 }
 \value{
-Character string with formatted mean ± SD
+Character string with formatted mean +/- SD
 }
 \description{
 These functions work with gtsummary's inline_text() and other functions to extract
