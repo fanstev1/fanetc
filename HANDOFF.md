@@ -1,160 +1,147 @@
-# Hand-off note — 2026-07-06
+# Hand-off note — v1.0 (2026-07-09)
 
-Branch: `fanetc_dev` (GitHub: fanstev1/fanetc). Everything is committed and pushed;
-working tree clean. Git identity is configured globally now (Chun-Po Steve Fan
-<chunpo.fan@gmail.com>).
+`master` now contains the full merge of `fanetc_dev`: the `table_one()` gtsummary
+rewrite, vectorized `construct_surv_var()`/`construct_cmprisk_var()`, the
+`show_surv()`/`show_cif()` dedup, the new `table_one_paired()` function, a
+`testthat` conversion of the old `dev-tests/` scripts, and a post-merge
+verification pass that fixed 3 known bugs plus everything `R CMD check`
+flagged as an ERROR. Not yet pushed to origin, not yet tagged — that's next.
 
-## Commit history of this effort
-
-| Commit | What |
-|---|---|
-| `7c7b475` | table_one() rewritten around gtsummary 2.1.0, backward compatible with the old API; old desp_table functions removed |
-| `7c6a1b8` | construct_surv_var/construct_cmprisk_var vectorized in R/construct_event_time.R (165x/6x faster, equivalence-tested vs last-good `7ab169b`); admin_censor_*/summarize_km/cif moved verbatim to R/admin_censor.R / R/summarize_survfit.R; extract_atrisk() wide-format regression fixed |
-| `3a56475` | show_surv/show_cif dedup via R/event_time_helpers.R (~190 lines removed); add_atrisk() rebuilt with line-based spacing; show_cif linewidth fix |
+**If you need the exact pre-merge code** (e.g. to reproduce an old analysis's
+results byte-for-byte), it's preserved unchanged on branch `fanetc_legacy`
+(commit `7ab169b`). See `REPRODUCING_LEGACY_RESULTS.md` at the repo root for
+the full list of breaking changes and install instructions — most notably,
+`library(fanetc)` no longer auto-attaches `tidyverse`/`Hmisc`/etc, and 8 old
+`desp_table` helper functions were removed.
 
 ## Current behavior worth knowing
 
-- **table_one()** (R/desp_table_gtsummary.R): gtsummary-based; needs **gtsummary,
-  cardx, broom >= 1.0.5** at runtime — confirm these exist on Databricks.
-- **construct_cmprisk_var()**: old `cmprisk_varname` argument still accepted alongside
-  `varname`. Two old bugs deliberately fixed: censored subjects no longer get evt=NA
-  when there are zero competing events, and all-dates-missing subjects no longer crash.
-- **add_atrisk()** (shared by show_surv and show_cif): at-risk table positions are in
-  **text lines below the panel bottom**, not data coordinates. Defaults
-  (svglite-measured, default 11pt theme): with >1 group the "At-risk N:" header starts
-  on the line right after the x-axis title (offset 2.23); with one group it sits
-  exactly one line of whitespace below the title (offset 3.06); rows 1.2 lines apart;
-  labels end 2 chars left of the first time point. `atrisk_init_pos` (in lines)
-  overrides the default; the "exact" spacing is calibrated to the default theme —
-  bigger axis text shifts it.
-- Regression suites in `dev-tests/` (Rbuildignored):
+- **table_one()** (`R/desp_table_gtsummary.R`): gtsummary-based; needs
+  **gtsummary, cardx, broom >= 1.0.5** at runtime.
+- **table_one_paired()** (`R/desp_table_paired.R`): companion function for
+  paired/matched long-format data (pair-ID column, grouping variable with
+  exactly 2 observed levels). See "table_one_paired()" section below.
+- **construct_cmprisk_var()**: old `cmprisk_varname` argument still accepted
+  alongside `varname`. Two old bugs deliberately fixed relative to the
+  pre-refactor version: censored subjects no longer get `evt=NA` when there
+  are zero competing events, and all-dates-missing subjects no longer crash.
+- **add_atrisk()** (shared by show_surv and show_cif): at-risk table
+  positions are in **text lines below the panel bottom**, not data
+  coordinates. Defaults (svglite-measured, default 11pt theme): with >1
+  group the "At-risk N:" header starts on the line right after the x-axis
+  title (offset 2.23); with one group it sits exactly one line of whitespace
+  below the title (offset 3.06); rows 1.2 lines apart; labels end 2 chars
+  left of the first time point. `atrisk_init_pos` (in lines) overrides the
+  default; the "exact" spacing is calibrated to the default theme — bigger
+  axis text shifts it.
+- **show_surv()**: a user-supplied `y_lim` is now respected for survival
+  curves (previously silently reset to `c(0,1)` — fixed post-merge).
+- **prepare_survfit()**: the censored/reference state placeholder that
+  `survival::survfit()` emits is literally `"(s0)"`, not `"0"` — matched
+  exactly (not via a substring match) so a real competing-risk state named
+  e.g. `"10"` is never misclassified as censored (fixed post-merge; the
+  previous `grepl("0", state)` had this bug).
+- **Test suite**: `tests/testthat/` (standard `devtools::test()` /
+  `R CMD check` layout; `dev-tests/` no longer exists, fully converted).
   ```
-  Rscript dev-tests/test_construct_equiv.R    # construct_* vs old reference + benchmarks
-  Rscript dev-tests/test_extract_atrisk.R     # at-risk shape/counts/labels/panel ranges
-  Rscript dev-tests/test_show_refactor.R      # 26-check show_surv/show_cif baseline
-  Rscript dev-tests/test_table_one.R          # table_one 9 cases
-  Rscript dev-tests/test_backward_compat.R    # table_one old-API compatibility
+  Rscript -e 'devtools::test()'
   ```
-  Local packages install from the Posit 2025-03-31 snapshot per ~/.Rprofile.
-  For spacing work: render with svglite and read the <text> x/y coordinates
-  (see dev-tests/test_show_refactor.R and the session notes) instead of eyeballing.
+  234 checks, 1 skip (flextable not installed). Local packages install from
+  the Posit 2025-03-31 snapshot per `~/.Rprofile`.
+- **`R CMD check` status**: 0 ERRORs, 0 WARNINGs except pre-existing
+  documentation-coverage gaps (see "Known debt" below), 3 NOTEs (2 are
+  environmental/cosmetic — see below — the third is the same doc-coverage
+  gap). Run via:
+  ```
+  R CMD build . --no-build-vignettes
+  _R_CHECK_FORCE_SUGGESTS_=false R CMD check --no-manual --no-vignettes fanetc_0.1.0.tar.gz
+  ```
+  (`_R_CHECK_FORCE_SUGGESTS_=false` is needed because `mice`/`mitools`/
+  `openxlsx`/`sandwich` aren't installed in every dev environment; they're
+  optional `Suggests`.)
 
-## Folder cleanup + backward-compat audit (2026-07-06, uncommitted at time of writing)
+## table_one_paired()
 
-- Deleted R/event_time_desp_revised.R (unexported *_revised duplicates, obsolete now
-  that the production functions are fixed) and R/to_be_delete.R (scratch; top-level
-  code broke R CMD build). R/ is now 7 files, ~2000 lines.
-- Stripped ~200 lines of dead commented-out code (old inline MI blocks in
-  fan_util_fun.R, abandoned alternatives in event_time_desp.R).
-- **Backward-compat audit** (`dev-tests/test_api_compat.R`): all 27 NAMESPACE exports
-  are defined and every argument name from the last-good commit `7ab169b` is still
-  accepted, with positional order preserved. Fixes made during the audit:
-  construct_cmprisk_var restored the old positional layout
-  `(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varname, append, ..., varname)`
-  (the `..., varname` layout came from the corrupted commits nobody could have run);
-  add_atrisk warns and falls back to the default when given an old-style negative
-  data-coordinate `atrisk_init_pos`.
+- `table_one_paired(df, pair_id, group, pairing_method = c("repeated_measure",
+  "matching"), ref_group = NULL, ...)` for paired data (long format,
+  pair-ID column, grouping variable with **exactly 2 levels**).
+- Design spec: `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`.
+  Implementation plan: `docs/superpowers/plans/2026-07-08-table-one-paired-implementation.md`.
+  Both went through multiple rounds of external review by Codex.
+- Tests: paired t-test / Wilcoxon signed-rank per `continuous_stat`;
+  `stats::mcnemar.test()` on the k×k pair table (McNemar/Bowker) for
+  categorical. Descriptives use all rows; tests/SMD use per-variable
+  complete pairs; the N-pairs column reports the count.
+- `pairing_method`: `"matching"` → marginal `smd::smd()` (pooled variance);
+  `"repeated_measure"` → Cohen's d_z (within-pair SD) for continuous
+  variables, marginal SMD for categorical variables in both modes. A
+  footnote states the method and reference level.
+- **Gotcha for anyone touching the SMD code:** `smd::smd()`'s sign
+  convention depends on variable **type**, not level count. For numeric or
+  logical `x` it returns a signed "reference minus other" estimate that
+  flips sign with `gref` — the opposite of this design's "non-reference
+  minus reference" convention, so `.paired_make_smd_fn()` negates it. For
+  factor or character `x` of *any* level count (2, 3, or more), it instead
+  returns the Yang–Dalton Mahalanobis distance, which is gref-invariant and
+  always non-negative — negating that would produce a spurious negative
+  "SMD," so those are left un-negated. The guard is
+  `signed_estimate <- is_cont || is.logical(x_var)`. This went through two
+  incorrect fix attempts (unconditional negation, then a level-count-based
+  guard) before landing on the type-based rule — verified against live
+  `smd::smd()` output for all six type/level combinations, independently,
+  twice (once directly, once by an external Codex review running the same
+  checks itself). If this is ever "simplified," every `pairing_method =
+  "matching"` SMD and every categorical SMD will silently flip sign.
+- Status: implementation complete (8 tasks via subagent-driven-development),
+  internally reviewed (3 rounds, caught the SMD bug above), and externally
+  reviewed by Codex twice — the first attempt couldn't execute R at all
+  (read-only sandbox blocks R's temp directory), the second (with
+  `--write`) independently ran `smd::smd()`, the paired tests, and the full
+  test suite itself and found no blocking issues. 91 of the merged suite's
+  234 checks cover this function specifically.
 
-## Docs + DESCRIPTION overhaul (2026-07-06)
+## Known debt (pre-existing, not introduced by this merge)
 
-- Docs regenerated with roxygen2 7.3.3; man/ now matches the code (stale Rd gone,
-  fanetc-package.Rd added). Eight exports still have @export but no title/desc, so
-  no Rd is generated for them (show_surv, add_atrisk, prepare_survfit,
-  run_logrank_test, run_gray_test, summarize_mi_*, generate_mi_glm_termplot_df).
-- DESCRIPTION rewritten: License is now **MIT + file LICENSE** (chosen as the
-  conventional default — change if another license is preferred); unused deps
-  dropped (Hmisc, lubridate, cowplot, extrafont, gridExtra, tidyverse, splines);
-  everything real moved Depends -> Imports; broom (>= 1.0.5) + cardx declared in
-  Imports because table_one()'s add_p needs them at runtime; mice/mitools/sandwich
-  in Suggests (the MI helpers resolve them via require() + the user's search path,
-  as they always have); svglite in Suggests.
-- **Behavior change to know about:** `library(fanetc)` no longer attaches
-  magrittr/tidyverse/ggplot2/survival/etc. Scripts that relied on that side effect
-  must library() those packages themselves. Package internals are covered by
-  namespace imports (R/fanetc-package.R) — verified by a clean-session smoke test
-  of all 15 major code paths with nothing attached, plus all dev-tests/ suites.
-- run_logrank_test() fix that came out of this: it re-evaluates the stored survfit
-  call in the caller's frame, so `survdiff`/`Surv` are now namespace-qualified in
-  the rewritten call (event_time_desp.R ~line 358).
+`R CMD check` still reports, unfixed:
+- **8 exported functions have no roxygen docs at all**: `add_atrisk`,
+  `generate_mi_glm_termplot_df`, `prepare_survfit`, `run_gray_test`,
+  `run_logrank_test`, `show_surv`, `summarize_mi_coxph`, `summarize_mi_glm`.
+- **Several documented functions are missing some `@param` entries**:
+  `calculate_type3_mi`, `decimalplaces`, `estimate_cif`, `estimate_km`,
+  `extract_atrisk`, `summarize_cif`, `summarize_coxph`, `summarize_km`,
+  `updateWorksheet`.
+- **NSE "no visible binding for global variable" NOTEs** across most of the
+  older MI/survival-summary functions (`summarize_mi_coxph`,
+  `summarize_mi_glm`, `summarize_coxph`, `summarize_km`, `summarize_cif`,
+  `calculate_type3_mi`, `generate_mi_glm_termplot_df`, plus a few in the
+  newer `prepare_survfit`/`show_cif`/`show_surv`/`table_one` themselves) —
+  standard tidyverse-NSE pattern, fixable via `utils::globalVariables()` or
+  `.data$` pronouns.
+- `summarize_mi_coxph`/`summarize_mi_glm` call `library(mitools)` /
+  `library(sandwich)` directly inside package functions instead of
+  `requireNamespace()` + `::`-qualified calls (both are optional `Suggests`,
+  not `Imports`).
+- `broom`/`cardx` are declared in `Imports` but never referenced via `::`
+  in `fanetc`'s own code — they're genuinely needed at runtime (by
+  `gtsummary::add_p()` internally), just not directly called, so this NOTE
+  is a false positive rather than a real problem.
 
-## table_one_paired() — IMPLEMENTED (2026-07-08)
-
-- New feature designed with the user: `table_one_paired(df, pair_id, group, ...)` for
-  paired data (long format, pair-ID column, grouping variable with **exactly 2
-  levels** — 3-level support was considered and explicitly dropped during design).
-- **Full spec (authoritative):** `docs/superpowers/specs/2026-07-06-table-one-paired-design.md`.
-  **Implementation plan (task-by-task, with the executable code that was
-  actually built):** `docs/superpowers/plans/2026-07-08-table-one-paired-implementation.md`.
-  Both went through multiple rounds of external review by Codex (via the
-  codex:codex-rescue agent; needs `codex login`) — the design spec caught and
-  fixed two critical integration flaws before any code was written; the
-  implementation plan caught a real sign-convention bug in the SMD calculation
-  (see below) before it shipped.
-- Key decisions, all confirmed by the user:
-  - Tests: paired t / Wilcoxon signed-rank per `continuous_stat`;
-    `stats::mcnemar.test` on the k×k pair table (McNemar/Bowker) for categorical.
-    Descriptives use all rows; tests/SMD use per-variable complete pairs; N-pairs
-    column reports the count.
-  - `pairing_method = c("repeated_measure", "matching")`: matching → marginal
-    smd::smd (pooled variance, **negated** — see gotcha below); repeated_measure
-    → Cohen's d_z (within-pair SD) for continuous, marginal SMD for categorical
-    in both modes. Footnote states method + reference level.
-  - `ref_group` argument: default first factor level / most-frequent for character
-    (first-observed tie-break) / sorted-first for logical-numeric; sets first group
-    column and SMD sign (non-reference minus reference).
-  - SMD digits: decimalplaces(x) with floor of 1 for continuous; 1 decimal for
-    categorical.
-  - **Integration mechanism (as actually built — differs from an earlier spec
-    draft):** gtsummary 2.1.0 has no `modify_column_order()` function (confirmed
-    absent from its exports), so the originally-planned manual
-    `modify_table_body()` merge couldn't work. The shipped mechanism uses
-    `gtsummary::add_stat()`/`add_p()` with **closures that ignore their own
-    `data` argument** and instead close over `table_one_paired()`'s own
-    validated data frame (which does contain `pair_id`) — so `pair_id` never
-    needs to ride inside the tbl_summary object at all. `add_stat()`'s default
-    `location = "label"` places N pairs/SMD on label rows only for free, and
-    calling `add_overall()` → `add_stat()` (N pairs) → `add_stat()` (SMD) →
-    `add_p()` in that order produces the correct final column order with no
-    separate reordering step. `table_one(add_p = FALSE)` still builds the
-    descriptive table and still never receives the `pair_id` column.
-  - Missing group rows and NA/empty pair IDs dropped with messages (before the
-    duplicate-pair-member validation, which errors); `include` normalized
-    against the original data with `pair_id` stripped and `group` always kept,
-    erroring with a clear message (not gtsummary's cryptic one) if nothing
-    real remains to summarize.
-- New code lives in `R/desp_table_paired.R` (repo convention); tests in
-  `dev-tests/test_table_one_paired.R`; `smd` package added to DESCRIPTION
-  Imports (Posit 2025-03-31 snapshot).
-- **Gotcha for anyone touching the SMD code:** `smd::smd()`'s own sign
-  convention is *reference minus other*, the opposite of this design's
-  *non-reference minus reference* — verified empirically (not just from its
-  docs) during the plan's review. `.paired_make_smd_fn()` negates the raw
-  `smd::smd()` result for exactly this reason; Cohen's d_z needs no such
-  negation (already correctly signed by construction). If this negation is
-  ever "cleaned up," every `pairing_method = "matching"` SMD and every
-  categorical SMD will silently flip sign.
-- Status: implementation complete, built via subagent-driven-development
-  (fresh implementer + reviewer subagent pair per task, all 8 tasks approved).
-  Code in `R/desp_table_paired.R`; tests in `dev-tests/test_table_one_paired.R`
-  (84 passing checks, 1 skip for optional `flextable`); docs regenerated via
-  roxygen2 (`NAMESPACE` exports `table_one_paired`, `man/table_one_paired.Rd`
-  created); full dev-tests suite green and a clean-session install smoke test
-  passes. Not yet pushed to origin — the final whole-branch code review is
-  still pending.
-
-## Next steps (priority order)
-
-1. Root *.md files (REFACTORING_SUMMARY.md, MIGRATION_GUIDE.md, ...) contain
-   unverified metrics (line counts, performance table) — trim or rewrite.
-2. Longer term: convert dev-tests/ into a proper testthat suite.
-3. Smaller review findings not yet addressed: show_surv silently resets user-supplied
-   `y_lim` to c(0,1); `grepl("0", state)` in prepare_survfit would misclassify a state
-   named "10"; show_cif @param docs are copy-paste errors (partially fixed).
+None of this was in scope for the merge/tidy pass (documenting 8 legacy
+functions accurately requires understanding semantics this session didn't
+verify, and the MI functions have no test coverage in this environment
+since `mice`/`mitools` aren't installed here — fixing blind would be
+risky). Worth a dedicated pass before a stricter `R CMD check --as-cran`
+matters.
 
 ## Gotchas
 
-- `git show <commit>:R/fan_util_fun.R` does not parse for a3f7f70..7c7b475 (corrupted
-  construct_surv_var); use `7ab169b` when pulling reference versions.
-- The at-risk table renders outside the panel: figures need `plot.margin` with enough
-  bottom/left room and the panel clip turned off (`ggplot_gtable` + `layout$clip`
-  trick in the show_cif roxygen example). ~70px left margin suffices now.
+- `git show <commit>:R/fan_util_fun.R` does not parse for `a3f7f70..7c7b475`
+  (corrupted construct_surv_var in that range); use `7ab169b` (== the tip of
+  `fanetc_legacy`) when pulling pre-refactor reference versions.
+- The at-risk table renders outside the panel: figures need `plot.margin`
+  with enough bottom/left room and the panel clip turned off
+  (`ggplot_gtable` + `layout$clip` trick in the show_cif roxygen example).
+  ~70px left margin suffices now.
+- Two roxygen examples (`admin_censor_cmprisk`, `show_cif`) fetch a live URL
+  and are wrapped in `\dontrun{}` for that reason — they're not exercised by
+  `R CMD check` or by the test suite.
