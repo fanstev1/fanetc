@@ -46,7 +46,7 @@ the full list of breaking changes and install instructions — most notably,
   ```
   Rscript -e 'devtools::test()'
   ```
-  234 checks, 1 skip (flextable not installed). Local packages install from
+  257 checks, 1 skip (flextable not installed). Local packages install from
   the Posit 2025-03-31 snapshot per `~/.Rprofile`.
 - **`R CMD check` status**: 0 ERRORs, 0 WARNINGs except pre-existing
   documentation-coverage gaps (see "Known debt" below), 3 NOTEs (2 are
@@ -117,21 +117,26 @@ the full list of breaking changes and install instructions — most notably,
   newer `prepare_survfit`/`show_cif`/`show_surv`/`table_one` themselves) —
   standard tidyverse-NSE pattern, fixable via `utils::globalVariables()` or
   `.data$` pronouns.
-- `summarize_mi_coxph`/`summarize_mi_glm` call `library(mitools)` /
-  `library(sandwich)` directly inside package functions instead of
-  `requireNamespace()` + `::`-qualified calls (both are optional `Suggests`,
-  not `Imports`).
+- ~~`summarize_mi_coxph`/`summarize_mi_glm` call `require(mitools)` /
+  `require(sandwich)` directly inside package functions~~ — **fixed
+  post-v1.0.0**: all MI helpers now use `::`-qualified calls plus a
+  `check_mi_packages()` guard, and `tests/testthat/test-summarize_mi.R`
+  pins down that they work with mice/mitools/sandwich detached. Root cause
+  worth knowing: `getfit()` and `pool()` live in **mice**, not mitools, so
+  the old `require(mitools)` never provided them — the functions only ever
+  worked when the user happened to have `library(mice)` attached.
 - `broom`/`cardx` are declared in `Imports` but never referenced via `::`
   in `fanetc`'s own code — they're genuinely needed at runtime (by
   `gtsummary::add_p()` internally), just not directly called, so this NOTE
   is a false positive rather than a real problem.
 
 None of this was in scope for the merge/tidy pass (documenting 8 legacy
-functions accurately requires understanding semantics this session didn't
-verify, and the MI functions have no test coverage in this environment
-since `mice`/`mitools` aren't installed here — fixing blind would be
-risky). Worth a dedicated pass before a stricter `R CMD check --as-cran`
-matters.
+functions accurately requires understanding semantics that session didn't
+verify). The MI functions now have test coverage
+(`tests/testthat/test-summarize_mi.R`; `mice`/`mitools`/`sandwich` are
+installed locally from the Posit snapshot), so the remaining debt is the
+documentation gaps and NSE NOTEs. Worth a dedicated pass before a stricter
+`R CMD check --as-cran` matters.
 
 ## Gotchas
 

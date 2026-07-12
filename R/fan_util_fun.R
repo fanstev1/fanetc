@@ -142,6 +142,19 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
   out
 }
 
+# mice and mitools are Suggests, not Imports: error informatively if the
+# multiple-imputation helpers are called without them installed. Note that
+# getfit()/pool() live in mice and MIextract()/MIcombine() in mitools -- the
+# old require(mitools) calls never actually provided getfit()/pool().
+check_mi_packages<- function() {
+  for (pkg in c("mice", "mitools")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      stop("Package '", pkg, "' is required for the multiple-imputation helpers; please install it.",
+           call. = FALSE)
+    }
+  }
+}
+
 #' @title calculate_type3_mi
 #'
 #' @details
@@ -149,20 +162,19 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
 #'
 #' @export
 calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
-  require(mitools)
-  require(sandwich)
+  check_mi_packages()
 
   # to calulate the type 3 error
   # Li, Meng, Raghunathan and Rubin. Significance levels from repeated p-values with multiply-imputed data. Statistica Sinica (1991)
   # x<- model.matrix(mira_obj$analyses[[1]])
-  x<- model.matrix(tmp<- getfit(mira_obj, 1L))
+  x<- model.matrix(tmp<- mice::getfit(mira_obj, 1L))
   varseq<- attr(x, "assign")
   df<- sapply(split(varseq, varseq), length)
   m <- length(mira_obj$analyses)
 
   # coef estimate and its vcov for each MI model
-  betas<- MIextract(mira_obj$analyses, fun= coef)
-  vars <- MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)
+  betas<- mitools::MIextract(mira_obj$analyses, fun= coef)
+  vars <- mitools::MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)
 
   # average betas and vcov cross MI mdls
   mean_betas<- purrr::reduce(betas, .f= `+`)/m
@@ -223,8 +235,8 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
     bind_rows() %>%
     mutate(pval= format_pvalue(chisq_p))
 
-  glm_out<- MIcombine(MIextract(mira_obj$analyses, fun= coef),
-                      MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)) %$%
+  glm_out<- mitools::MIcombine(mitools::MIextract(mira_obj$analyses, fun= coef),
+                      mitools::MIextract(mira_obj$analyses, fun= if (is.null(vcov_fun)) vcov else vcov_fun)) %$%
     data.frame(est= coefficients,
                se = sqrt(diag(variance))) %>%
     rownames_to_column(var= "term") %>%
@@ -268,7 +280,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
   cox_out<- cox_mira %>%
     # pool() %>%
     # see https://github.com/amices/mice/issues/246#
-    pool(dfcom = getfit(., 1L)$nevent - length(coef(getfit(., 1L)))) %>%
+    mice::pool(dfcom = mice::getfit(., 1L)$nevent - length(coef(mice::getfit(., 1L)))) %>%
     summary(conf.int = TRUE,
             conf.level = 1-alpha,
             exponentiate= exponentiate) %>%
@@ -295,8 +307,8 @@ generate_mi_glm_termplot_df<- function(mira_obj,
                                        terms= NULL,
                                        center_at= NULL,
                                        vcov_fun= NULL, ...) {
-  require(mitools)
-  dummy_mdl<- getfit(mira_obj, 1L)
+  check_mi_packages()
+  dummy_mdl<- mice::getfit(mira_obj, 1L)
   tt<- stats::terms(dummy_mdl)
   terms<- if (is.null(terms)) 1:length(labels(tt)) else terms
   cn<- attr(tt, "term.labels")[terms]
@@ -308,13 +320,13 @@ generate_mi_glm_termplot_df<- function(mira_obj,
     else as.character(term)
   }
 
-  betas <- MIextract(mira_obj$analyses,
+  betas <- mitools::MIextract(mira_obj$analyses,
                      fun = coef)
 
-  vars  <- MIextract(mira_obj$analyses,
+  vars  <- mitools::MIextract(mira_obj$analyses,
                      fun = if (is.null(vcov_fun)) vcov else vcov_fun)
 
-  mi_res<- MIcombine(betas, vars)
+  mi_res<- mitools::MIcombine(betas, vars)
 
   dummy_mdl$coefficients<- mi_res$coefficients
 
