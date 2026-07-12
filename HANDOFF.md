@@ -48,13 +48,13 @@ the full list of breaking changes and install instructions — most notably,
   ```
   257 checks, 1 skip (flextable not installed). Local packages install from
   the Posit 2025-03-31 snapshot per `~/.Rprofile`.
-- **`R CMD check` status**: 0 ERRORs, 0 WARNINGs, 3 NOTEs (openxlsx not
-  installed in this environment; the broom/cardx unused-Imports false
-  positive; the NSE "no visible binding" NOTE — see "Known debt" below).
-  The documentation-coverage WARNINGs were fixed post-v1.0.0. Run via:
+- **`R CMD check` status**: 0 ERRORs, 0 WARNINGs, 1 NOTE (openxlsx not
+  installed in this environment — purely environmental). The
+  documentation-coverage WARNINGs and the NSE/unused-Imports NOTEs were
+  all fixed post-v1.0.0 (see "Resolved debt" below). Run via:
   ```
   R CMD build . --no-build-vignettes
-  _R_CHECK_FORCE_SUGGESTS_=false R CMD check --no-manual --no-vignettes fanetc_0.1.0.tar.gz
+  _R_CHECK_FORCE_SUGGESTS_=false R CMD check --no-manual --no-vignettes fanetc_1.0.0.tar.gz
   ```
   (`_R_CHECK_FORCE_SUGGESTS_=false` is needed because `mice`/`mitools`/
   `openxlsx`/`sandwich` aren't installed in every dev environment; they're
@@ -100,42 +100,33 @@ the full list of breaking changes and install instructions — most notably,
   test suite itself and found no blocking issues. 91 of the merged suite's
   234 checks cover this function specifically.
 
-## Known debt (pre-existing, not introduced by this merge)
+## Resolved debt (post-v1.0.0 cleanup, 2026-07-11)
 
-`R CMD check` still reports, unfixed:
-- ~~8 exported functions with no roxygen docs; 9 documented functions
-  missing `@param` entries~~ — **fixed post-v1.0.0**: every exported
-  function now has a full roxygen block (written from the actual function
-  bodies, not guessed), `man/` regenerated with roxygen2 7.3.3, and the
+The whole pre-existing debt list from the v1.0 merge is now cleared —
+`R CMD check` is 0 ERRORs / 0 WARNINGs / 1 environmental NOTE:
+- **MI-helper `require()` landmine** — all MI helpers use `::`-qualified
+  calls behind a `check_mi_packages()` guard, and
+  `tests/testthat/test-summarize_mi.R` pins down that they work with
+  mice/mitools/sandwich detached. Root cause worth knowing: `getfit()` and
+  `pool()` live in **mice**, not mitools, so the old `require(mitools)`
+  never provided them — the functions only ever worked when the user
+  happened to have `library(mice)` attached.
+- **Documentation coverage** — every exported function has a full roxygen
+  block (written from the actual function bodies, not guessed); the
   "missing documentation entries" / "Rd \usage" WARNINGs are gone. Raw `%`
-  characters in roxygen text (which comment out the rest of the line in the
-  generated Rd) were escaped as `\%` — markdown mode is off, so `%` is NOT
-  auto-escaped; keep using `\%` in new roxygen text.
-- **NSE "no visible binding for global variable" NOTEs** across most of the
-  older MI/survival-summary functions (`summarize_mi_coxph`,
-  `summarize_mi_glm`, `summarize_coxph`, `summarize_km`, `summarize_cif`,
-  `calculate_type3_mi`, `generate_mi_glm_termplot_df`, plus a few in the
-  newer `prepare_survfit`/`show_cif`/`show_surv`/`table_one` themselves) —
-  standard tidyverse-NSE pattern, fixable via `utils::globalVariables()` or
-  `.data$` pronouns.
-- ~~`summarize_mi_coxph`/`summarize_mi_glm` call `require(mitools)` /
-  `require(sandwich)` directly inside package functions~~ — **fixed
-  post-v1.0.0**: all MI helpers now use `::`-qualified calls plus a
-  `check_mi_packages()` guard, and `tests/testthat/test-summarize_mi.R`
-  pins down that they work with mice/mitools/sandwich detached. Root cause
-  worth knowing: `getfit()` and `pool()` live in **mice**, not mitools, so
-  the old `require(mitools)` never provided them — the functions only ever
-  worked when the user happened to have `library(mice)` attached.
-- `broom`/`cardx` are declared in `Imports` but never referenced via `::`
-  in `fanetc`'s own code — they're genuinely needed at runtime (by
-  `gtsummary::add_p()` internally), just not directly called, so this NOTE
-  is a false positive rather than a real problem.
-
-The MI functions have test coverage (`tests/testthat/test-summarize_mi.R`;
-`mice`/`mitools`/`sandwich` are installed locally from the Posit snapshot)
-and all exported functions are documented, so the only remaining debt is
-the NSE NOTEs and the broom/cardx false positive. Worth cleaning up before
-a stricter `R CMD check --as-cran` matters.
+  characters in roxygen text comment out the rest of the line in the
+  generated Rd — markdown mode is off, so `%` is NOT auto-escaped; keep
+  writing `\%` in new roxygen text.
+- **NSE "no visible binding" NOTEs** — genuine function calls got
+  `@importFrom stats ...` in `R/fanetc-package.R`; pipeline column names
+  (plus the magrittr dot and `%$%` element names) are declared via
+  `utils::globalVariables()` in the same file. New pipeline column names
+  that R CMD check flags should be appended to that vector.
+- **broom/cardx "unused Imports" NOTE** — they are needed at runtime by
+  `gtsummary::add_p()` but never called directly; the never-invoked
+  `ignore_unused_imports()` in `R/fanetc-package.R` references their
+  namespaces to keep the check quiet. Don't delete it, and don't move
+  broom/cardx to Suggests.
 
 ## Gotchas
 
