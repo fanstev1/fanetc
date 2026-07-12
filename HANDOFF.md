@@ -59,6 +59,11 @@ the full list of breaking changes and install instructions — most notably,
   (`_R_CHECK_FORCE_SUGGESTS_=false` is needed because `mice`/`mitools`/
   `openxlsx`/`sandwich` aren't installed in every dev environment; they're
   optional `Suggests`.)
+- **R version requirements**: DESCRIPTION declares `R (>= 4.2)` and
+  `survival (>= 3.7-0)` — both empirically verified floors, not guesses
+  (gtsummary/cardx require R >= 4.2; survival 3.6-4 and older break
+  `extract_atrisk()` on R 4.3.x). Full evidence and the per-R-version
+  verification results are in `R_VERSION_COMPATIBILITY.md` at the repo root.
 
 ## table_one_paired()
 

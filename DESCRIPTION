@@ -4,9 +4,9 @@ Title: Descriptive table
 Version: 1.0.0
 Author: Chun-Po Steve Fan
 Maintainer: Chun-Po Steve Fan <chunpo.fan@gmail.com>
-Description: Miscellaneous functions that Steve wrote to facilitate TRCP data analysis project.
+Description: Miscellaneous functions that Steve wrote to facilitate day-to-day data-analysis projects.
 Depends:
-    R (>= 3.5.0)
+    R (>= 4.2)
 Imports:
     broom (>= 1.0.5),
     cardx,
@@ -23,7 +23,7 @@ Imports:
     rlang,
     scales,
     smd,
-    survival,
+    survival (>= 3.7-0),
     tibble,
     tidyr,
     tidyselect,
