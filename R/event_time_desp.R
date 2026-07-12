@@ -5,6 +5,7 @@
 #'
 #' @param fit a survfit object
 #' @param time.list a numeric vector specifying the time points at which the number of at-risk subjects is calculated.
+#' @param time.scale a divisor applied to the survfit times before matching \code{time.list} (e.g. 365.25 to report counts on a year scale when the fit is in days; default 1)
 #' @return A dataframe containing the number of at risk patients at time-, overall or by strata
 #' @export
 extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
@@ -80,6 +81,19 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
 
 
 
+#' @title prepare_survfit
+#'
+#' @details
+#' The function converts a survfit (Kaplan-Meier) or survfitms (multi-state /
+#' competing risks) object into a nested tibble with one row per stratum (and, for
+#' survfitms, per state), used by show_surv() and show_cif(). Each row carries the
+#' tidy estimates (data), the step-curve coordinates including a time-0 anchor
+#' (plot_prob_d), and the confidence-band coordinates (plot_ci_d). The
+#' censored/reference placeholder state that survfit emits ("(s0)", or "" on some
+#' versions) is relabeled "0" and set as the reference level.
+#'
+#' @param surv_obj a survfit or survfitms object
+#' @return a nested tibble with columns strata (plus state for survfitms), data, plot_prob_d and plot_ci_d
 #' @export
 prepare_survfit <- function(surv_obj) {
   prepare_cmprisk <- function(surv_obj) {
@@ -224,6 +238,22 @@ prepare_survfit <- function(surv_obj) {
   return(out)
 }
 
+#' @title add_atrisk
+#'
+#' @details
+#' The function adds an at-risk table underneath a survival or cumulative-incidence
+#' plot. The horizontal positions are data coordinates (the time points); the
+#' vertical positions are absolute text lines below the panel bottom, so the row
+#' spacing does not change with figure or panel size. The annotations are drawn
+#' outside the panel, so the figure needs a sufficient bottom/left plot.margin and
+#' the panel clip turned off to show them (see the show_cif() example).
+#'
+#' @param p a ggplot object showing the survival or cumulative-incidence curves
+#' @param surv_obj the survfit object the plot was built from
+#' @param x_break a numeric vector of time points at which the at-risk counts are displayed (default: the plot's x-axis breaks)
+#' @param atrisk_init_pos position of the "At-risk N:" header, in text lines below the panel bottom. Default: with more than one group the header starts on the line right after the x-axis title (2.23); with a single group it sits one full line of whitespace below it (3.06)
+#' @param plot_theme a ggplot2 theme object; its text family, face and size are used for the table text (default: plain 11pt Arial)
+#' @return a ggplot object with the at-risk table added
 #' @export
 add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_theme = NULL) {
 
@@ -308,10 +338,17 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
 #' @title estimate_km
 #'
 #' @details
-#' The function analyzes the data (df) using Kaplan-Meier survival method with pointwise 95% CI estimated using log-log
-#' transformation (same as SAS's defualt). The function store the input data in the call(), which can be used in
+#' The function analyzes the data (df) using Kaplan-Meier survival method with pointwise 95\% CI estimated using log-log
+#' transformation (same as SAS's default). The function store the input data in the call(), which can be used in
 #' run_logrank_test().
 #'
+#' @param df a dataframe containing the analysis variables
+#' @param evt_time the unquoted name of the event/censoring time variable
+#' @param evt the unquoted name of the event indicator variable, as accepted by \code{survival::Surv()}
+#' @param group the unquoted name of an optional grouping variable; omit it for a single overall curve
+#' @param ci_transformation the confidence-interval transformation passed to \code{survfit()} as conf.type (default "log-log")
+#' @param ... additional arguments passed to \code{survival::survfit()}
+#' @return a survfit object whose call embeds the input data, so run_logrank_test() can re-evaluate it
 #' @export
 estimate_km<- function(df, evt_time, evt, group, ci_transformation = "log-log", ...) {
 
@@ -356,6 +393,15 @@ estimate_km<- function(df, evt_time, evt, group, ci_transformation = "log-log", 
   return(eval(eval(out)))
 }
 
+#' @title run_logrank_test
+#'
+#' @details
+#' The function re-evaluates the survfit call stored in a survfit object (e.g. one
+#' created by estimate_km(), which embeds the data in the call) as
+#' \code{survival::survdiff()} with rho= 0, and returns the log-rank test p-value.
+#'
+#' @param surv_obj a survfit object whose call embeds the data and a grouping variable, e.g. from estimate_km()
+#' @return the log-rank p-value (a numeric scalar)
 #' @export
 run_logrank_test<- function(surv_obj) {
 
@@ -374,6 +420,31 @@ run_logrank_test<- function(surv_obj) {
 }
 
 
+#' @title show_surv
+#'
+#' @details
+#' The function shows Kaplan-Meier survival (or failure) curves with and without
+#' strata, with optional confidence-interval ribbons, an at-risk table and the
+#' log-rank p-value.
+#'
+#' @param surv_obj a survfit object, as returned by estimate_km().
+#' @param x_lab the x-axis label.
+#' @param y_lab the y-axis label; the default depends on plot_cdf.
+#' @param y_lim a numeric vector of length 2 specifying the y-axis limits; the lower limit is always reset to 0, and NULL gives c(0, 1). Curves are truncated at an upper limit below 1.
+#' @param x_break a numeric vector specifying the x-axis break points (default: automatic).
+#' @param y_break a numeric vector specifying the y-axis break points (default: automatic).
+#' @param color_scheme the color palette used for strata: "brewer", "grey", "viridis", or "manual".
+#' @param color_list a list of scale arguments, required only when color_scheme= 'manual' (e.g. list(values= c('red', 'blue'))).
+#' @param plot_theme a ggplot2 theme object applied to the plot.
+#' @param add_ci a logical parameter indicating whether confidence interval ribbons should be added to the plot.
+#' @param add_atrisk a logical parameter indicating whether at-risk table should be added to the figure.
+#' @param add_legend a logical parameter indicating whether legend should be added to the figure; forced to FALSE for a single cohort or when the at-risk table is shown (the table is color-coded by cohort instead).
+#' @param add_pvalue a logical parameter indicating whether the log-rank p-value (from run_logrank_test()) should be added to the plot; forced to FALSE for a single cohort.
+#' @param atrisk_init_pos position of the "At-risk N:" header, in text lines below the panel bottom. Default: with more than one group the header starts on the line right after the x-axis title (2.23); with a single group it sits one full line of whitespace below it (3.06)
+#' @param pvalue_pos a character parameter indicating where the p-value should be added to the plot.
+#' @param plot_cdf a logical parameter indicating whether the failure function 1 - S(t) should be plotted instead of the survival function.
+#' @param print_fig a logical parameter indicating whether the figure should be printed to the active device.
+#' @return A ggplot object.
 #' @export
 show_surv<- function(surv_obj,
                      x_lab= 'Time',
@@ -498,10 +569,15 @@ show_surv<- function(surv_obj,
 #' @title estimate_cif
 #'
 #' @details
-#' The function analyzes the competing data (df) using Andersen-Johansen method in estimating cumulative incidence
-#' function.The function store the input data in the call(), which can be used in run_gray_test().
+#' The function analyzes the competing data (df) using Aalen-Johansen method in estimating cumulative incidence
+#' function. The function store the input data in the call(), which can be used in run_gray_test().
 #'
-#'
+#' @param df a dataframe containing the analysis variables
+#' @param evt_time the unquoted name of the event/censoring time variable
+#' @param evt the unquoted name of the event-status variable (typically a factor whose first level codes censoring), as accepted by \code{survival::Surv()} for multi-state data
+#' @param group the unquoted name of an optional grouping variable; omit it for a single overall estimate
+#' @param ... additional arguments passed to \code{survival::survfit()}
+#' @return a survfitms object whose call embeds the input data, so run_gray_test() can re-evaluate it
 #' @export
 estimate_cif<- function(df, evt_time, evt, group, ...) {
 
@@ -526,6 +602,17 @@ estimate_cif<- function(df, evt_time, evt, group, ...) {
 }
 
 
+#' @title run_gray_test
+#'
+#' @details
+#' The function runs Gray's test for equality of the cumulative incidence functions
+#' across groups (via \code{cmprsk::cuminc()}), re-using the data and the time,
+#' status and group variables stored in the call of a survfitms object created by
+#' estimate_cif().
+#'
+#' @param surv_obj a survfitms object whose call embeds the data and a grouping variable, e.g. from estimate_cif()
+#' @param evt_type the event-type code(s) whose p-value(s) to return (default 1:2); NULL returns every event type except the first
+#' @return a numeric vector of Gray's test p-values, one per requested event type
 #' @export
 run_gray_test<- function(surv_obj, evt_type= 1:2) {
 

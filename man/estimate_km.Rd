@@ -6,11 +6,27 @@
 \usage{
 estimate_km(df, evt_time, evt, group, ci_transformation = "log-log", ...)
 }
+\arguments{
+\item{df}{a dataframe containing the analysis variables}
+
+\item{evt_time}{the unquoted name of the event/censoring time variable}
+
+\item{evt}{the unquoted name of the event indicator variable, as accepted by \code{survival::Surv()}}
+
+\item{group}{the unquoted name of an optional grouping variable; omit it for a single overall curve}
+
+\item{ci_transformation}{the confidence-interval transformation passed to \code{survfit()} as conf.type (default "log-log")}
+
+\item{...}{additional arguments passed to \code{survival::survfit()}}
+}
+\value{
+a survfit object whose call embeds the input data, so run_logrank_test() can re-evaluate it
+}
 \description{
 estimate_km
 }
 \details{
-The function analyzes the data (df) using Kaplan-Meier survival method with pointwise 95% CI estimated using log-log
-transformation (same as SAS's defualt). The function store the input data in the call(), which can be used in
+The function analyzes the data (df) using Kaplan-Meier survival method with pointwise 95\% CI estimated using log-log
+transformation (same as SAS's default). The function store the input data in the call(), which can be used in
 run_logrank_test().
 }

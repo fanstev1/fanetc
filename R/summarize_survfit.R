@@ -5,6 +5,10 @@
 #' @details
 #' The function summarize the fitted KM at the time points specified by a user.
 #'
+#' @param fit a survfit object
+#' @param times a numeric vector of time points at which the estimates are reported (default: pretty(fit$time))
+#' @param failure_fun a logical parameter indicating whether the failure probability 1 - S(t) should be reported instead of survival
+#' @return a wide tibble with one row per time point and one column per stratum, each cell formatted as "xx.x\% [lower, upper]"
 #' @export
 summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
 
@@ -67,6 +71,9 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
 #' @details
 #' The function summarizes the fitted CIF at the time points specified by a user.
 #'
+#' @param fit a survfitms object
+#' @param times a numeric vector of time points at which the estimates are reported (default: pretty(fit$time))
+#' @return a wide dataframe with one row per time point and one column per state (and stratum), each cell formatted as "xx.x\% [lower, upper]"
 #' @export
 summarize_cif<- function(fit, times= NULL) {
   ss <- summary(fit, times = if (is.null(times)) pretty(fit$time) else times, extend = TRUE)

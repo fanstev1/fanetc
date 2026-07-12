@@ -6,6 +6,14 @@
 \usage{
 summarize_cif(fit, times = NULL)
 }
+\arguments{
+\item{fit}{a survfitms object}
+
+\item{times}{a numeric vector of time points at which the estimates are reported (default: pretty(fit$time))}
+}
+\value{
+a wide dataframe with one row per time point and one column per state (and stratum), each cell formatted as "xx.x\% [lower, upper]"
+}
 \description{
 summarize_cif
 }

@@ -48,10 +48,10 @@ the full list of breaking changes and install instructions — most notably,
   ```
   257 checks, 1 skip (flextable not installed). Local packages install from
   the Posit 2025-03-31 snapshot per `~/.Rprofile`.
-- **`R CMD check` status**: 0 ERRORs, 0 WARNINGs except pre-existing
-  documentation-coverage gaps (see "Known debt" below), 3 NOTEs (2 are
-  environmental/cosmetic — see below — the third is the same doc-coverage
-  gap). Run via:
+- **`R CMD check` status**: 0 ERRORs, 0 WARNINGs, 3 NOTEs (openxlsx not
+  installed in this environment; the broom/cardx unused-Imports false
+  positive; the NSE "no visible binding" NOTE — see "Known debt" below).
+  The documentation-coverage WARNINGs were fixed post-v1.0.0. Run via:
   ```
   R CMD build . --no-build-vignettes
   _R_CHECK_FORCE_SUGGESTS_=false R CMD check --no-manual --no-vignettes fanetc_0.1.0.tar.gz
@@ -103,13 +103,14 @@ the full list of breaking changes and install instructions — most notably,
 ## Known debt (pre-existing, not introduced by this merge)
 
 `R CMD check` still reports, unfixed:
-- **8 exported functions have no roxygen docs at all**: `add_atrisk`,
-  `generate_mi_glm_termplot_df`, `prepare_survfit`, `run_gray_test`,
-  `run_logrank_test`, `show_surv`, `summarize_mi_coxph`, `summarize_mi_glm`.
-- **Several documented functions are missing some `@param` entries**:
-  `calculate_type3_mi`, `decimalplaces`, `estimate_cif`, `estimate_km`,
-  `extract_atrisk`, `summarize_cif`, `summarize_coxph`, `summarize_km`,
-  `updateWorksheet`.
+- ~~8 exported functions with no roxygen docs; 9 documented functions
+  missing `@param` entries~~ — **fixed post-v1.0.0**: every exported
+  function now has a full roxygen block (written from the actual function
+  bodies, not guessed), `man/` regenerated with roxygen2 7.3.3, and the
+  "missing documentation entries" / "Rd \usage" WARNINGs are gone. Raw `%`
+  characters in roxygen text (which comment out the rest of the line in the
+  generated Rd) were escaped as `\%` — markdown mode is off, so `%` is NOT
+  auto-escaped; keep using `\%` in new roxygen text.
 - **NSE "no visible binding for global variable" NOTEs** across most of the
   older MI/survival-summary functions (`summarize_mi_coxph`,
   `summarize_mi_glm`, `summarize_coxph`, `summarize_km`, `summarize_cif`,
@@ -130,13 +131,11 @@ the full list of breaking changes and install instructions — most notably,
   `gtsummary::add_p()` internally), just not directly called, so this NOTE
   is a false positive rather than a real problem.
 
-None of this was in scope for the merge/tidy pass (documenting 8 legacy
-functions accurately requires understanding semantics that session didn't
-verify). The MI functions now have test coverage
-(`tests/testthat/test-summarize_mi.R`; `mice`/`mitools`/`sandwich` are
-installed locally from the Posit snapshot), so the remaining debt is the
-documentation gaps and NSE NOTEs. Worth a dedicated pass before a stricter
-`R CMD check --as-cran` matters.
+The MI functions have test coverage (`tests/testthat/test-summarize_mi.R`;
+`mice`/`mitools`/`sandwich` are installed locally from the Posit snapshot)
+and all exported functions are documented, so the only remaining debt is
+the NSE NOTEs and the broom/cardx false positive. Worth cleaning up before
+a stricter `R CMD check --as-cran` matters.
 
 ## Gotchas
 

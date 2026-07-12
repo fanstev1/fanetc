@@ -6,9 +6,20 @@
 \usage{
 calculate_type3_mi(mira_obj, vcov_fun = NULL)
 }
+\arguments{
+\item{mira_obj}{a \code{mira} object: a list of models fitted to each imputed dataset, e.g. from \code{with(mice::mice(...), glm(...))}}
+
+\item{vcov_fun}{an optional function extracting the variance-covariance matrix from each fitted model (e.g. \code{sandwich::vcovHC}); the default NULL uses \code{stats::vcov}}
+}
+\value{
+a list with one dataframe per model term (columns var, rid, df, stat, chisq_p); each element carries its design-matrix columns in the "col_in_X" attribute
+}
 \description{
 calculate_type3_mi
 }
 \details{
-The function calculates the  3 p-values based on Wald's statistics.
+The function calculates the type 3 p-values based on Wald's statistics for a model
+fitted to multiply-imputed data, following Li, Meng, Raghunathan and Rubin (1991),
+"Significance levels from repeated p-values with multiply-imputed data",
+Statistica Sinica.
 }

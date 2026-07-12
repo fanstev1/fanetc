@@ -6,6 +6,7 @@
 #' An internal function that determines the number of digits in the summary of a continuous variable.
 #'
 #' @param x a continous variable
+#' @param max_dec the maximum number of decimal places to return (default 4)
 #' @return the most frequent number of digits in the variable
 #' @export
 decimalplaces <- function(x, max_dec= 4L) {
@@ -46,6 +47,7 @@ decimalplaces <- function(x, max_dec= 4L) {
 #' @param wb a \code{wb} object
 #' @param sheetName a name of the sheet to be updated
 #' @param x a dataframe to be write in the \code{wb} object
+#' @param ... additional arguments (currently ignored)
 #' @return a \code{wb} object
 #' @export
 updateWorksheet<- function(wb, sheetName, x, ...) {
@@ -71,6 +73,11 @@ updateWorksheet<- function(wb, sheetName, x, ...) {
 #' @details
 #' The function summarizes the fitted cox model with the type 3 error based on Wald's statistics.
 #'
+#' @param mdl a fitted \code{coxph} or \code{coxph.penal} object
+#' @param exponentiate a logical parameter indicating whether hazard ratios should be reported instead of log-hazard ratios (default TRUE)
+#' @param maxlabel the maximum length of the term labels, passed to \code{summary.coxph()}
+#' @param alpha the significance level; estimates are reported with (1-alpha) normal-approximation confidence intervals
+#' @return a dataframe with columns term, stat ("estimate [lower, upper]") and pval; terms with more than 1 df get an additional row carrying the type 3 Wald p-value
 #' @export
 summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
 
@@ -158,8 +165,14 @@ check_mi_packages<- function() {
 #' @title calculate_type3_mi
 #'
 #' @details
-#' The function calculates the  3 p-values based on Wald's statistics.
+#' The function calculates the type 3 p-values based on Wald's statistics for a model
+#' fitted to multiply-imputed data, following Li, Meng, Raghunathan and Rubin (1991),
+#' "Significance levels from repeated p-values with multiply-imputed data",
+#' Statistica Sinica.
 #'
+#' @param mira_obj a \code{mira} object: a list of models fitted to each imputed dataset, e.g. from \code{with(mice::mice(...), glm(...))}
+#' @param vcov_fun an optional function extracting the variance-covariance matrix from each fitted model (e.g. \code{sandwich::vcovHC}); the default NULL uses \code{stats::vcov}
+#' @return a list with one dataframe per model term (columns var, rid, df, stat, chisq_p); each element carries its design-matrix columns in the "col_in_X" attribute
 #' @export
 calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
   check_mi_packages()
@@ -221,6 +234,19 @@ calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
 }
 
 
+#' @title summarize_mi_glm
+#'
+#' @details
+#' The function summarizes a generalized linear model fitted to multiply-imputed data:
+#' the per-imputation coefficients are pooled by Rubin's rules via
+#' \code{mitools::MIcombine()}, and type 3 p-values are taken from
+#' \code{calculate_type3_mi()}.
+#'
+#' @param mira_obj a \code{mira} object: a list of GLMs fitted to each imputed dataset, e.g. from \code{with(mice::mice(...), glm(...))}
+#' @param exponentiate a logical parameter indicating whether the pooled estimates and confidence limits should be exponentiated (default FALSE)
+#' @param alpha the significance level; estimates are reported with (1-alpha) normal-approximation confidence intervals
+#' @param vcov_fun an optional function extracting the variance-covariance matrix from each fitted model (e.g. \code{sandwich::vcovHC}); the default NULL uses \code{stats::vcov}
+#' @return a dataframe with one row per coefficient (columns var, stat "estimate [lower, upper]", pval, est, se, conf_low, conf_high, rid); terms with more than 1 df get an additional row carrying the type 3 Wald p-value
 #' @export
 summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun= NULL) {
 
@@ -261,6 +287,19 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
     select(var, stat, pval, everything())
 }
 
+#' @title summarize_mi_coxph
+#'
+#' @details
+#' The function summarizes a Cox model fitted to multiply-imputed data: the
+#' per-imputation coefficients are pooled by Rubin's rules via \code{mice::pool()},
+#' with the complete-data degrees of freedom set to the number of events minus the
+#' number of coefficients, and type 3 p-values are taken from
+#' \code{calculate_type3_mi()}.
+#'
+#' @param cox_mira a \code{mira} object: a list of \code{coxph} models fitted to each imputed dataset
+#' @param exponentiate a logical parameter indicating whether hazard ratios should be reported instead of log-hazard ratios (default TRUE)
+#' @param alpha the significance level; estimates are reported with (1-alpha) confidence intervals
+#' @return a dataframe with one row per coefficient (columns var, stat "estimate [lower, upper]", pval, est, conf_low, conf_high, rid); terms with more than 1 df get an additional row carrying the type 3 Wald p-value
 #' @export
 summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
 
@@ -302,6 +341,21 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     select(var, stat, pval, everything())
 }
 
+#' @title generate_mi_glm_termplot_df
+#'
+#' @details
+#' The function builds \code{stats::termplot()}-style plot data for a generalized
+#' linear model fitted to multiply-imputed data. The per-imputation coefficients and
+#' variance-covariance matrices are pooled by Rubin's rules via
+#' \code{mitools::MIcombine()}, and each term's partial effect is returned with
+#' pointwise 95\% confidence limits.
+#'
+#' @param mira_obj a \code{mira} object: a list of GLMs fitted to each imputed dataset
+#' @param terms an integer vector selecting the model terms to include (default: all terms)
+#' @param center_at an optional list (one element per selected term) giving the covariate value at which each term's effect is anchored at 0: a factor level for factor terms, the smallest observed x at or above the given value for numeric terms (logical terms are anchored at FALSE); the default NULL keeps termplot's own centering
+#' @param vcov_fun an optional function extracting the variance-covariance matrix from each fitted model (e.g. \code{sandwich::vcovHC}); the default NULL uses \code{stats::vcov}
+#' @param ... additional arguments (currently ignored)
+#' @return a named list with one dataframe per term (columns x, y, se, conf_low, conf_high)
 #' @export
 generate_mi_glm_termplot_df<- function(mira_obj,
                                        terms= NULL,

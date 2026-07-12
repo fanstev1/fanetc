@@ -21,7 +21,7 @@
 #'
 #' **For categorical variables (including logical/binary):**
 #' - Fisher's exact test (with simulation for complex tables)
-#' - Summary statistics: n (%)
+#' - Summary statistics: n (\%)
 #'
 #' The input data frame should only contain numeric, logical, and factor variables.
 #' Factor variables with only two levels should be converted to logical variables.

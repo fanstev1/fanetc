@@ -6,10 +6,24 @@
 \usage{
 estimate_cif(df, evt_time, evt, group, ...)
 }
+\arguments{
+\item{df}{a dataframe containing the analysis variables}
+
+\item{evt_time}{the unquoted name of the event/censoring time variable}
+
+\item{evt}{the unquoted name of the event-status variable (typically a factor whose first level codes censoring), as accepted by \code{survival::Surv()} for multi-state data}
+
+\item{group}{the unquoted name of an optional grouping variable; omit it for a single overall estimate}
+
+\item{...}{additional arguments passed to \code{survival::survfit()}}
+}
+\value{
+a survfitms object whose call embeds the input data, so run_gray_test() can re-evaluate it
+}
 \description{
 estimate_cif
 }
 \details{
-The function analyzes the competing data (df) using Andersen-Johansen method in estimating cumulative incidence
-function.The function store the input data in the call(), which can be used in run_gray_test().
+The function analyzes the competing data (df) using Aalen-Johansen method in estimating cumulative incidence
+function. The function store the input data in the call(), which can be used in run_gray_test().
 }

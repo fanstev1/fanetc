@@ -6,6 +6,16 @@
 \usage{
 summarize_km(fit, times = NULL, failure_fun = FALSE)
 }
+\arguments{
+\item{fit}{a survfit object}
+
+\item{times}{a numeric vector of time points at which the estimates are reported (default: pretty(fit$time))}
+
+\item{failure_fun}{a logical parameter indicating whether the failure probability 1 - S(t) should be reported instead of survival}
+}
+\value{
+a wide tibble with one row per time point and one column per stratum, each cell formatted as "xx.x\% [lower, upper]"
+}
 \description{
 summarize_km
 }

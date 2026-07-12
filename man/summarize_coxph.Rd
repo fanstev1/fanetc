@@ -6,6 +6,18 @@
 \usage{
 summarize_coxph(mdl, exponentiate = TRUE, maxlabel = 100, alpha = 0.05)
 }
+\arguments{
+\item{mdl}{a fitted \code{coxph} or \code{coxph.penal} object}
+
+\item{exponentiate}{a logical parameter indicating whether hazard ratios should be reported instead of log-hazard ratios (default TRUE)}
+
+\item{maxlabel}{the maximum length of the term labels, passed to \code{summary.coxph()}}
+
+\item{alpha}{the significance level; estimates are reported with (1-alpha) normal-approximation confidence intervals}
+}
+\value{
+a dataframe with columns term, stat ("estimate [lower, upper]") and pval; terms with more than 1 df get an additional row carrying the type 3 Wald p-value
+}
 \description{
 summarize_coxph
 }
