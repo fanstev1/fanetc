@@ -141,8 +141,12 @@ Integration tests on the show functions:
    version of `survival::lung`): the ribbon layer's `x`/`ymin`/`ymax` from
    `layer_data()` are **identical** to the old manual pre-stepping, recomputed
    independently inside the test with the original index logic.
-8. `show_surv(plot_cdf = TRUE, add_ci = TRUE)`: ribbon still valid
-   (`ymin <= ymax` everywhere, stepped shape preserved after the 1 - x swap).
+8. `show_surv()` equivalence in test 7 is run for **both** curve types:
+   - survival function (`plot_cdf = FALSE`): ribbon matches the old manual
+     stepping of `conf_low`/`conf_high` directly;
+   - failure function (`plot_cdf = TRUE`): ribbon matches the old pipeline's
+     output — manual stepping combined with the `1 - x` transform and
+     low/high swap — and stays valid (`ymin <= ymax` everywhere).
 9. The existing suite (p-value placement, palettes, y_lim behavior) stays
    green.
 
