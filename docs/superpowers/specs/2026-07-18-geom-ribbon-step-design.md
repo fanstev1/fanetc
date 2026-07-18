@@ -77,10 +77,16 @@ Three components:
 ### Error handling
 
 - Invalid `direction` rejected via `match.arg(direction, c("hv", "vh", "mid"))`.
-- Missing `ymin`/`ymax` aesthetics produce ggplot2's standard required-aesthetic
-  error (via `required_aes`).
-- `na.rm` is forwarded to the layer as usual; `GeomRibbon` handles NA rows the
-  same way `geom_ribbon()` does.
+- Missing `ymin`/`ymax` aesthetics produce an informative error from the stat's
+  `setup_data()`. (Deliberate deviation from the usual `required_aes`
+  mechanism: `StatStepRibbon` declares only `x` as `required_aes`, because the
+  default `Stat$compute_layer()` strips non-finite rows of every required
+  aesthetic **with a warning** before stepping. The old pipeline passed NA
+  confidence limits straight through to `GeomRibbon`, which draws them as gaps
+  in the ribbon — declaring only `x` preserves that exact behavior, warning-free.)
+- NA `ymin`/`ymax` rows are therefore kept and yield gaps in the ribbon,
+  identical to `geom_ribbon()` on pre-stepped data.
+- `na.rm` is forwarded to the layer as usual.
 
 ### Deliberate limitation (YAGNI)
 
@@ -90,8 +96,14 @@ without breaking the API.
 
 ### Refactor: `show_surv()` / `show_cif()` use the new geom
 
-`prepare_survfit()` and `plot_ci_d` have no consumers outside
-`R/event_time_desp.R`, so the change is contained:
+`plot_ci_d` has no consumers outside `R/event_time_desp.R`. Note
+`prepare_survfit()` is an exported (internal-facing) helper, so the change to
+`plot_ci_d`'s shape is a documented behavior change: its roxygen text and the
+`fanetc-cheatsheet-main.md` entry must be updated to say `plot_ci_d` now holds
+raw per-time CI limits, stepped at plot time by `geom_ribbon_step()` (which
+also gets its own cheatsheet entry under Plotting).
+
+The code changes:
 
 1. **`prepare_survfit()`**: the `plot_ci_d` mapping keeps only the column
    selection — plain sorted `time, conf_low, conf_high` per stratum. The manual
