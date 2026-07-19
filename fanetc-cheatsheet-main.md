@@ -109,8 +109,11 @@ All 12 fanetc-exported functions the skills call are present on master. `Cs()` i
 - Gotcha: `add_legend` is forced `FALSE` for a single cohort or when the at-risk table is shown (cohorts are then color-coded in the table instead); `add_pvalue` forced `FALSE` for a single cohort.
 - `y_lim`'s lower bound is always reset to 0; `NULL` gives `c(0,1)`.
 
+#### geom_ribbon_step(mapping = NULL, data = NULL, ..., direction = "hv", na.rm = FALSE, show.legend = NA, inherit.aes = TRUE)
+- Drop-in replacement for `ggplot2::geom_ribbon()` that draws the ribbon as a step function (`direction` `"hv"` default / `"vh"` / `"mid"`), sorting by x within each group first; NA limits become gaps, as in `geom_ribbon()`. Used for the CI bands in `show_surv()`/`show_cif()`.
+
 #### prepare_survfit(surv_obj)
-- Internal-facing but exported helper: converts a `survfit`/`survfitms` object into a nested tibble (one row per stratum, plus state for `survfitms`) with step-curve and CI-band coordinates; used by `show_surv()`/`show_cif()`.
+- Internal-facing but exported helper: converts a `survfit`/`survfitms` object into a nested tibble (one row per stratum, plus state for `survfitms`) with step-curve coordinates (`plot_prob_d`) and raw per-time CI limits (`plot_ci_d`, stepped at plot time by `geom_ribbon_step()`); used by `show_surv()`/`show_cif()`.
 - Gotcha: relabels survival's censored/reference placeholder state (`"(s0)"` or `""`) to `"0"` and sets it as the reference level.
 
 ### Summary / tables

@@ -88,7 +88,8 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
 #' competing risks) object into a nested tibble with one row per stratum (and, for
 #' survfitms, per state), used by show_surv() and show_cif(). Each row carries the
 #' tidy estimates (data), the step-curve coordinates including a time-0 anchor
-#' (plot_prob_d), and the confidence-band coordinates (plot_ci_d). The
+#' (plot_prob_d), and the raw per-time confidence limits (plot_ci_d), which
+#' show_surv() and show_cif() draw as step ribbons via geom_ribbon_step(). The
 #' censored/reference placeholder state that survfit emits ("(s0)", or "" on some
 #' versions) is relabeled "0" and set as the reference level.
 #'
@@ -220,18 +221,10 @@ prepare_survfit <- function(surv_obj) {
       plot_ci_d = purrr::map(
         data,
         function(df) {
-          nn <- nrow(df)
-          # check http://stackoverflow.com/questions/33874909/how-do-i-add-shading-and-color-to-the-confidence-intervals-in-ggplot-2-generated
-          ys <- rep(1:nn, each = 2)[-2 * nn]
-          xs <- c(1, rep(2:nn, each = 2))
-
-          df %$%
-            dplyr::tibble(
-              time = time[xs],
-              conf_low = conf_low[ys],
-              conf_high = conf_high[ys]
-            ) # %>%
-          # filter(!(is.na(conf_low) & is.na(conf_high)))
+          # raw per-time CI limits; geom_ribbon_step() steps them at plot time
+          df %>%
+            dplyr::select(one_of("time", "conf_low", "conf_high")) %>%
+            dplyr::arrange(time)
         }
       )
     )
@@ -528,7 +521,7 @@ show_surv<- function(surv_obj,
     }
 
     out<- out +
-      geom_ribbon(data= plot_ci_d,
+      geom_ribbon_step(data= plot_ci_d,
                   aes(x= time, ymin= conf_low, ymax= conf_high, fill= strata),
                   alpha= .2, show.legend = FALSE) +
       scale_pair$fill
@@ -810,7 +803,7 @@ show_cif<- function(surv_obj,
     out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
 
       out +
-        geom_ribbon(data= plot_ci_d,
+        geom_ribbon_step(data= plot_ci_d,
                     aes(x   = time,
                         ymin= conf_low,
                         ymax= conf_high,
@@ -822,7 +815,7 @@ show_cif<- function(surv_obj,
     } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
 
       out +
-        geom_ribbon(data= plot_ci_d,
+        geom_ribbon_step(data= plot_ci_d,
                     aes(x= time,
                         ymin = conf_low,
                         ymax = conf_high,
@@ -834,7 +827,7 @@ show_cif<- function(surv_obj,
     } else {
 
       out +
-        geom_ribbon(data= plot_ci_d,
+        geom_ribbon_step(data= plot_ci_d,
                     aes(x= time,
                         ymin= conf_low,
                         ymax= conf_high,
