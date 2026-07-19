@@ -111,7 +111,6 @@ prepare_survfit <- function(surv_obj) {
 
     out <- dplyr::tibble(
       strata = stemp,
-      # state    = rep(surv_obj$state, each= length(surv_obj$time)),
       state = rep(
         # survival::survfit() labels the pre-event/reference state "(s0)" (or, on some
         # versions, "") regardless of the original event factor's level names -- match
@@ -125,8 +124,7 @@ prepare_survfit <- function(surv_obj) {
       conf_low = as.numeric(surv_obj$lower),
       conf_high = as.numeric(surv_obj$upper)
     )
-    # if (class(out$strata) != "factor") out$strata <- factor(out$strata)
-    if (class(out$state) != "factor") out$state <- relevel(factor(out$state), ref = "0")
+    if (!is.factor(out$state)) out$state <- relevel(factor(out$state), ref = "0")
     out
   }
 
@@ -134,11 +132,9 @@ prepare_survfit <- function(surv_obj) {
     # set up strata
     nstrat <- if (is.null(surv_obj$strata)) 1 else length(surv_obj$strata)
     if (is.null(surv_obj$strata)) {
-      # stemp <- rep(1, length(surv_obj$time)) # same length as stime
       stemp <- factor(rep(1, length(surv_obj$time)), 1, labels = c("Overall"))
     } else {
       strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
-      # stemp <- rep(1:nstrat, surv_obj$strata) # same length as stime
       stemp <- factor(rep(1:nstrat, surv_obj$strata), 1:nstrat, strata_lab)
     }
 
@@ -154,17 +150,16 @@ prepare_survfit <- function(surv_obj) {
     )
   }
 
-  out <- if (any(class(surv_obj) == "survfitms")) {
+  out <- if (inherits(surv_obj, "survfitms")) {
     surv_obj %>%
       prepare_cmprisk() %>%
-      # dplyr::group_by(strata, state) %>%
       tidyr::nest(.by = c(strata, state)) %>%
       dplyr::mutate(
         plot_prob_d = purrr::map2(
           state, data,
           function(state, df) {
             df %>%
-              dplyr::select(one_of("time", "prob")) %>%
+              dplyr::select(all_of(c("time", "prob"))) %>%
               dplyr::bind_rows(
                 dplyr::tribble(
                   ~time, ~prob,
@@ -178,7 +173,6 @@ prepare_survfit <- function(surv_obj) {
   } else {
     surv_obj %>%
       prepare_surv() %>%
-      # dplyr::group_by(strata) %>%
       tidyr::nest(.by = strata) %>%
       dplyr::mutate(
         data = purrr::map(
@@ -193,7 +187,7 @@ prepare_survfit <- function(surv_obj) {
           data,
           function(df) {
             df <- df %>%
-              dplyr::select(one_of("time", "prob"))
+              dplyr::select(all_of(c("time", "prob")))
 
             df <- if (is.na(match(0, df$time))) {
               # if time 0 is not included in the estimate
@@ -223,7 +217,7 @@ prepare_survfit <- function(surv_obj) {
         function(df) {
           # raw per-time CI limits; geom_ribbon_step() steps them at plot time
           df %>%
-            dplyr::select(one_of("time", "conf_low", "conf_high")) %>%
+            dplyr::select(all_of(c("time", "conf_low", "conf_high"))) %>%
             dplyr::arrange(time)
         }
       )
@@ -442,7 +436,6 @@ run_logrank_test<- function(surv_obj) {
 show_surv<- function(surv_obj,
                      x_lab= 'Time',
                      y_lab= if (plot_cdf) 'The proportion of deceased subjects' else 'The freedom from death',
-                     # x_lim= NULL,
                      y_lim= NULL,
                      x_break= NULL,
                      y_break= NULL,
@@ -460,27 +453,22 @@ show_surv<- function(surv_obj,
                      print_fig = TRUE) {
 
   # no need to add pvalues for a single cohort
-  add_pvalue <- if (all(names(surv_obj) != 'strata')) FALSE else add_pvalue
+  add_pvalue <- if (!"strata" %in% names(surv_obj)) FALSE else add_pvalue
   # no need to add legend if it is a single cohort or add risk (when it is >1 cohorts). The at-risk table will be color-coded to indicate cohort
-  add_legend <- if (all(names(surv_obj) != 'strata') | add_atrisk) FALSE else add_legend
+  add_legend <- if (!"strata" %in% names(surv_obj) || add_atrisk) FALSE else add_legend
 
   color_scheme <- match.arg(color_scheme)
-  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s).")
+  if (color_scheme=='manual' && is.null(color_list)) stop("Please provide a list of color value(s).")
 
   scale_pair<- event_time_color_scales(color_scheme, color_list)
 
-  if (!plot_cdf & !is.null(y_lim)) {
-    y_lim<- c(0, max(y_lim, na.rm= TRUE))
-    message("The lower limit of y-axis was reset to 0 for survival function.")
-  } else if (plot_cdf & !is.null(y_lim)) {
-    y_lim<- c(0, max(y_lim, na.rm= TRUE))
-    message("The lower limit of y-axis was reset to 0 for failure function.")
-  } else if (!plot_cdf & is.null(y_lim)) {
+  curve_name<- if (plot_cdf) "failure" else "survival"
+  if (is.null(y_lim)) {
     y_lim<- c(0, 1)
-    message("The parameter y_lim was set to y_lim= c(0, 1) for survival function.")
-  } else if (plot_cdf & is.null(y_lim)) {
-    y_lim<- c(0, 1)
-    message("The parameter y_lim was set to y_lim= c(0, 1) for failure function.")
+    message("The parameter y_lim was set to y_lim= c(0, 1) for ", curve_name, " function.")
+  } else {
+    y_lim<- c(0, max(y_lim, na.rm= TRUE))
+    message("The lower limit of y-axis was reset to 0 for ", curve_name, " function.")
   }
 
   #---- prepare survfit for plot ----
@@ -492,9 +480,7 @@ show_surv<- function(surv_obj,
     dplyr::mutate(prob= if (plot_cdf) 1-prob else prob)
 
   if (y_lim[2] < 1) {
-    plot_prob_d <- plot_prob_d %>%
-      dplyr::mutate(prob = pmin(prob, y_lim[2], na.rm = TRUE)) %>%
-      dplyr::group_by(strata)
+    plot_prob_d <- dplyr::mutate(plot_prob_d, prob = pmin(prob, y_lim[2], na.rm = TRUE))
   }
 
   out<- ggplot() +
@@ -504,7 +490,6 @@ show_surv<- function(surv_obj,
     scale_pair$colour +
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
-                      #  expand= c(0.01, 0.005),
                        expand= c(0.01, 0),
                        labels= function(x) scales::number(x, accuracy = 1))
 
@@ -515,7 +500,7 @@ show_surv<- function(surv_obj,
 
     if (plot_cdf) {
       plot_ci_d<- plot_ci_d %>%
-        mutate_at(vars(starts_with('conf')), function(x) 1-x) %>%
+        mutate(across(starts_with('conf'), function(x) 1-x)) %>%
         rename(conf_high= conf_low,
                conf_low = conf_high)
     }
@@ -532,12 +517,11 @@ show_surv<- function(surv_obj,
                                  expand= c(0.005, 0),
                                  labels= function(x) scales::percent(x, accuracy = 1))
 
-  out <- out + if (!is.null(y_lim)) coord_cartesian(ylim = y_lim, clip = "on") else coord_cartesian(clip = "on")
+  out <- out + coord_cartesian(ylim = y_lim, clip = "on")
 
   if (add_pvalue) {
     pval<- run_logrank_test(surv_obj) %>%
       format_pvalue()
-    # pval<- format_pvalue(pval)
     pval<- ifelse(trimws(pval)=="<0.001", "Log-rank p< 0.001", paste0("Log-rank p= ", pval) )
 
     out<- annotate_pvalue(out, pval, match.arg(pvalue_pos), plot_theme)
@@ -552,7 +536,6 @@ show_surv<- function(surv_obj,
   out<- out + plot_theme
 
   if (print_fig) print(out)
-  # print(out, vp= viewport(width = unit(6.5, "inches"), height = unit(6.5, "inches")))
   return(out)
 }
 
@@ -709,7 +692,6 @@ run_gray_test<- function(surv_obj, evt_type= 1:2) {
 #' @export
 show_cif<- function(surv_obj,
                     evt_type = 1,
-                    # evt_label= identity, # identity function
                     evt_label= function(x) {
                       recode_factor(x,
                                     `1`= "Event",
@@ -750,18 +732,13 @@ show_cif<- function(surv_obj,
     unnest(cols = c(plot_prob_d))
 
   add_pvalue<- if (nlevels(plot_prob_d$strata)==1) FALSE else add_pvalue
-  add_legend<- if ((nlevels(plot_prob_d$strata)==1 &
-                    nlevels(plot_prob_d$state) ==1 )) FALSE else add_legend
+  add_legend<- if (nlevels(plot_prob_d$strata)==1 &&
+                   nlevels(plot_prob_d$state) ==1) FALSE else add_legend
 
   color_scheme<- match.arg(color_scheme)
-  if (color_scheme=='manual' & is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
+  if (color_scheme=='manual' && is.null(color_list)) stop("Please provide a list of color value(s) when a manual color scheme is specified.")
 
   scale_pair<- event_time_color_scales(color_scheme, color_list, grey_end = 0.65, blank_guide_title = TRUE)
-
-  # x_lab<- if (is.null(x_lab)) "Time" else x_lab
-  # y_lab<- if (is.null(y_lab)) "Proportion of subjects" else y_lab
-  # x_break<- if (is.null(x_break)) scales::pretty_breaks(6) else x_break
-  # y_break<- if (is.null(y_break)) scales::pretty_breaks(6) else y_break
 
   out<- ggplot()
   out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
@@ -785,15 +762,13 @@ show_cif<- function(surv_obj,
     scale_x_continuous(name  = x_lab,
                        breaks= if (is.null(x_break)) scales::pretty_breaks(6) else x_break,
                        expand= c(0.01, 0.005),
-                       # limits = x_lim,
                        labels= function(x) scales::comma(x, accuracy = 1)) +
     scale_y_continuous(name  = y_lab,
                        breaks= if (is.null(y_break)) scales::pretty_breaks(6) else y_break,
                        expand= c(0.01, 0),
-                       # limits= y_lim,
                        labels= function(x) scales::percent(x, accuracy = 1))
 
-  out<- if (!is.null(x_lim) | !is.null(y_lim)) out + coord_cartesian(xlim= x_lim, ylim = y_lim, clip = "on") else out
+  out<- if (!is.null(x_lim) || !is.null(y_lim)) out + coord_cartesian(xlim= x_lim, ylim = y_lim, clip = "on") else out
 
   if (add_ci) {
     plot_ci_d<- cmprisk_mat %>%
