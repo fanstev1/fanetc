@@ -1,11 +1,65 @@
-# Hand-off note — v1.0 (2026-07-09)
+# Hand-off note — updated 2026-07-19 (geom_ribbon_step)
 
-`master` now contains the full merge of `fanetc_dev`: the `table_one()` gtsummary
+## Latest: geom_ribbon_step() — step-function CI ribbons (2026-07-19)
+
+Merged to `master` and pushed to origin (`0c67296..3131279`, merge commit
+`3131279`; 4 feature commits + spec/plan docs).
+
+- **What**: `geom_ribbon_step()` (`R/geom_ribbon_step.R`) is an exported
+  drop-in for `ggplot2::geom_ribbon()` that draws the ribbon as a step
+  function — `direction = "hv"` (default, right-continuous; what survival/ROC
+  curves need), `"vh"`, or `"mid"`, mirroring `geom_step()`. Internals: pure
+  helper `stairstep_ribbon()` + ggproto `StatStepRibbon`; only the wrapper is
+  exported.
+- **Behavior contract worth knowing**: data are sorted by x within each group
+  before stepping (input order never matters). NA `ymin`/`ymax` rows reach
+  `GeomRibbon` un-dropped and warning-free, drawing as gaps — this works
+  because `StatStepRibbon` declares only `"x"` in `required_aes` and checks
+  ymin/ymax itself in `setup_data()`. Do NOT "fix" `required_aes` to
+  `c("x","ymin","ymax")`: the default `Stat$compute_layer()` would then strip
+  NA rows with a warning and break geom_ribbon() parity. Deliberate limits
+  (documented in the Rd): no orientation/flipped-aes support, and ymin/ymax
+  must be aesthetics, not constant layer params.
+- **Refactor**: `prepare_survfit()$plot_ci_d` now holds **raw** per-time CI
+  limits (`time, conf_low, conf_high`, sorted); the manual pre-stepping that
+  used to live there is gone, and `show_surv()`/`show_cif()` draw CI bands
+  with `geom_ribbon_step()`. This is a documented behavior change of the
+  exported `prepare_survfit()` (roxygen + `fanetc-cheatsheet-main.md`
+  updated).
+- **Tests**: `test-geom_ribbon_step.R` (unit: all three directions vs the
+  original index logic, sort invariance, per-group stepping, NA gaps, 0/1-row
+  lifecycle) and `test-show_ci_ribbon.R` (equivalence: ribbons match the old
+  manual stepping for KM survival, KM failure/`plot_cdf`, and CIF, plus an
+  exact `tolerance = 0` comparison against
+  `tests/testthat/fixtures/ribbon_step_baseline.rds`).
+- **Fixture rule**: `ribbon_step_baseline.rds` was captured by running the
+  actual PRE-refactor master code in a temp worktree. If it ever needs
+  regeneration, do it only from pre-refactor code (`0c67296` or earlier),
+  never from current code — regenerating from current code would silently
+  reintroduce the circular-oracle problem the fixture exists to prevent.
+- **Process artifacts**: spec
+  `docs/superpowers/specs/2026-07-18-geom-ribbon-step-design.md`, plan
+  `docs/superpowers/plans/2026-07-18-geom-ribbon-step.md`, execution ledger
+  `.superpowers/sdd/progress.md`. Implemented task-by-task by Codex
+  (`gpt-5.6-sol`); dual independent whole-branch reviews (Claude + Codex)
+  both ended "Ready to merge: Yes" after one fix round (Codex caught the
+  circular test oracle).
+- **Codex environment gotchas** (verified this session): on this machine's
+  ChatGPT-account auth the only accepted top model id is `gpt-5.6-sol`
+  (`gpt-5.x-codex` ids are rejected), and the Codex write sandbox cannot
+  touch `.git` — have Codex implement/test and put the intended commit in its
+  report; the coordinator commits.
+
+# Prior hand-off — v1.0 (2026-07-09)
+
+`master` contains the full merge of `fanetc_dev`: the `table_one()` gtsummary
 rewrite, vectorized `construct_surv_var()`/`construct_cmprisk_var()`, the
 `show_surv()`/`show_cif()` dedup, the new `table_one_paired()` function, a
 `testthat` conversion of the old `dev-tests/` scripts, and a post-merge
 verification pass that fixed 3 known bugs plus everything `R CMD check`
-flagged as an ERROR. Not yet pushed to origin, not yet tagged — that's next.
+flagged as an ERROR. v1.0.0 was released 2026-07-11 and pushed to origin
+(tag sits at `81aa601`, which also added the verified R-version floors —
+see `R_VERSION_COMPATIBILITY.md`).
 
 **If you need the exact pre-merge code** (e.g. to reproduce an old analysis's
 results byte-for-byte), it's preserved unchanged on branch `fanetc_legacy`
@@ -46,8 +100,8 @@ the full list of breaking changes and install instructions — most notably,
   ```
   Rscript -e 'devtools::test()'
   ```
-  257 checks, 1 skip (flextable not installed). Local packages install from
-  the Posit 2025-03-31 snapshot per `~/.Rprofile`.
+  328 checks, 1 skip (flextable not installed) as of 2026-07-19. Local
+  packages install from the Posit 2025-03-31 snapshot per `~/.Rprofile`.
 - **`R CMD check` status**: 0 ERRORs, 0 WARNINGs, 1 NOTE (openxlsx not
   installed in this environment — purely environmental). The
   documentation-coverage WARNINGs and the NSE/unused-Imports NOTEs were
