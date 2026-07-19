@@ -740,23 +740,21 @@ show_cif<- function(surv_obj,
 
   scale_pair<- event_time_color_scales(color_scheme, color_list, grey_end = 0.65, blank_guide_title = TRUE)
 
-  out<- ggplot()
-  out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
-    out +
-      geom_step(data= plot_prob_d,
-                aes(x= time, y= prob, group= state_label, color= state_label),
-                linewidth= 1.1, show.legend = add_legend)
-  } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
-    out +
-      geom_step(data= plot_prob_d,
-                aes(x= time, y= prob, group= strata, color= strata),
-                linewidth= 1.1, show.legend = add_legend)
+  # one display series drives group/colour/fill in both layers; which column
+  # supplies it depends on how many strata and states are being shown
+  series_col<- if (nlevels(plot_prob_d$strata)==1 && nlevels(plot_prob_d$state)>1) {
+    "state_label"
+  } else if (nlevels(plot_prob_d$strata)>1 && nlevels(plot_prob_d$state)==1) {
+    "strata"
   } else {
-    out +
-      geom_step(data= plot_prob_d,
-                aes(x= time, y= prob, group= state_strata, color= state_strata),
-                linewidth= 1.1, show.legend = add_legend)
+    "state_strata"
   }
+
+  out<- ggplot() +
+    geom_step(data= plot_prob_d,
+              aes(x= time, y= prob,
+                  group= .data[[series_col]], color= .data[[series_col]]),
+              linewidth= 1.1, show.legend = add_legend)
   out<- out +
     scale_pair$colour +
     scale_x_continuous(name  = x_lab,
@@ -775,46 +773,12 @@ show_cif<- function(surv_obj,
       dplyr::select(strata, state, state_label, state_strata, plot_ci_d) %>%
       unnest(cols = c(plot_ci_d))
 
-    out<- if (nlevels(plot_prob_d$strata)==1 & nlevels(plot_prob_d$state)>1) {
-
-      out +
-        geom_ribbon_step(data= plot_ci_d,
-                    aes(x   = time,
-                        ymin= conf_low,
-                        ymax= conf_high,
-                        group= state_label,
-                        fill= state_label),
-                    alpha= .2,
-                    show.legend = FALSE)
-
-    } else if (nlevels(plot_prob_d$strata)>1 & nlevels(plot_prob_d$state)==1) {
-
-      out +
-        geom_ribbon_step(data= plot_ci_d,
-                    aes(x= time,
-                        ymin = conf_low,
-                        ymax = conf_high,
-                        group= strata,
-                        fill = strata),
-                    alpha= .2,
-                    show.legend = FALSE)
-
-    } else {
-
-      out +
-        geom_ribbon_step(data= plot_ci_d,
-                    aes(x= time,
-                        ymin= conf_low,
-                        ymax= conf_high,
-                        group= state_strata,
-                        fill = state_strata),
-                    alpha= .2,
-                    show.legend = FALSE)
-
-    }
-
-    out<- out + scale_pair$fill
-
+    out<- out +
+      geom_ribbon_step(data= plot_ci_d,
+                  aes(x= time, ymin= conf_low, ymax= conf_high,
+                      group= .data[[series_col]], fill= .data[[series_col]]),
+                  alpha= .2, show.legend = FALSE) +
+      scale_pair$fill
   }
 
   if (add_pvalue) {
