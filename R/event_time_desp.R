@@ -81,6 +81,54 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
 
 
 
+# strata factor for the tidy rows of a survfit/survfitms object. For
+# multi-state fits the per-stratum block repeats once per state
+# (times_per_state = length(surv_obj$states)); plain survival fits use 1.
+.survfit_strata<- function(surv_obj, times_per_state= 1L) {
+  if (is.null(surv_obj$strata)) {
+    factor(rep(1, length(surv_obj$time) * times_per_state), 1, labels = "Overall")
+  } else {
+    strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
+    factor(rep(rep(seq_along(surv_obj$strata), surv_obj$strata), times_per_state),
+           seq_along(surv_obj$strata), strata_lab)
+  }
+}
+
+# tidy per-time rows of a survfitms (competing risks) object
+.prepare_multistate_data<- function(surv_obj) {
+  out <- dplyr::tibble(
+    strata = .survfit_strata(surv_obj, times_per_state = length(surv_obj$states)),
+    state = rep(
+      # survival::survfit() labels the pre-event/reference state "(s0)" (or, on some
+      # versions, "") regardless of the original event factor's level names -- match
+      # that literal placeholder, not any state whose name merely contains "0"
+      # (e.g. a real competing-risk state named "10" must not be swept in here).
+      replace(surv_obj$state, nchar(surv_obj$state) == 0 | surv_obj$state == "(s0)", "0"),
+      each = length(surv_obj$time)
+    ),
+    time = rep(surv_obj$time, length(surv_obj$state)),
+    prob = as.numeric(surv_obj$pstate),
+    conf_low = as.numeric(surv_obj$lower),
+    conf_high = as.numeric(surv_obj$upper)
+  )
+  if (!is.factor(out$state)) out$state <- relevel(factor(out$state), ref = "0")
+  out
+}
+
+# tidy per-time rows of a plain survfit (Kaplan-Meier) object
+.prepare_km_data<- function(surv_obj) {
+  dplyr::tibble(
+    strata = .survfit_strata(surv_obj),
+    time = surv_obj$time,
+    prob = surv_obj$surv,
+    conf_low = surv_obj$lower,
+    conf_high = surv_obj$upper,
+    n_risk = surv_obj$n.risk, # immediately before time t
+    n_event = surv_obj$n.event,
+    n_censor = surv_obj$n.censor
+  )
+}
+
 #' @title prepare_survfit
 #'
 #' @details
@@ -97,62 +145,9 @@ extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
 #' @return a nested tibble with columns strata (plus state for survfitms), data, plot_prob_d and plot_ci_d
 #' @export
 prepare_survfit <- function(surv_obj) {
-  prepare_cmprisk <- function(surv_obj) {
-    # set up strata
-    nstrat <- if (is.null(surv_obj$strata)) 1 else length(surv_obj$strata)
-    if (is.null(surv_obj$strata)) {
-      stemp <- rep(1, length(surv_obj$time) * length(surv_obj$states)) # same length as stime
-      stemp <- factor(stemp, 1, labels = c("Overall"))
-    } else {
-      strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
-      stemp <- rep(rep(1:nstrat, surv_obj$strata), length(surv_obj$states)) # same length as stime
-      stemp <- factor(stemp, 1:nstrat, strata_lab)
-    }
-
-    out <- dplyr::tibble(
-      strata = stemp,
-      state = rep(
-        # survival::survfit() labels the pre-event/reference state "(s0)" (or, on some
-        # versions, "") regardless of the original event factor's level names -- match
-        # that literal placeholder, not any state whose name merely contains "0"
-        # (e.g. a real competing-risk state named "10" must not be swept in here).
-        replace(surv_obj$state, nchar(surv_obj$state) == 0 | surv_obj$state == "(s0)", "0"),
-        each = length(surv_obj$time)
-      ),
-      time = rep(surv_obj$time, length(surv_obj$state)),
-      prob = as.numeric(surv_obj$pstate),
-      conf_low = as.numeric(surv_obj$lower),
-      conf_high = as.numeric(surv_obj$upper)
-    )
-    if (!is.factor(out$state)) out$state <- relevel(factor(out$state), ref = "0")
-    out
-  }
-
-  prepare_surv <- function(surv_obj) {
-    # set up strata
-    nstrat <- if (is.null(surv_obj$strata)) 1 else length(surv_obj$strata)
-    if (is.null(surv_obj$strata)) {
-      stemp <- factor(rep(1, length(surv_obj$time)), 1, labels = c("Overall"))
-    } else {
-      strata_lab <- sapply(strsplit(names(surv_obj$strata), "="), function(x) x[2])
-      stemp <- factor(rep(1:nstrat, surv_obj$strata), 1:nstrat, strata_lab)
-    }
-
-    dplyr::tibble(
-      strata = stemp,
-      time = surv_obj$time,
-      prob = surv_obj$surv,
-      conf_low = surv_obj$lower,
-      conf_high = surv_obj$upper,
-      n_risk = surv_obj$n.risk, # immediately before time t
-      n_event = surv_obj$n.event,
-      n_censor = surv_obj$n.censor
-    )
-  }
-
   out <- if (inherits(surv_obj, "survfitms")) {
     surv_obj %>%
-      prepare_cmprisk() %>%
+      .prepare_multistate_data() %>%
       tidyr::nest(.by = c(strata, state)) %>%
       dplyr::mutate(
         plot_prob_d = purrr::map2(
@@ -172,7 +167,7 @@ prepare_survfit <- function(surv_obj) {
       )
   } else {
     surv_obj %>%
-      prepare_surv() %>%
+      .prepare_km_data() %>%
       tidyr::nest(.by = strata) %>%
       dplyr::mutate(
         data = purrr::map(
@@ -190,9 +185,8 @@ prepare_survfit <- function(surv_obj) {
               dplyr::select(all_of(c("time", "prob")))
 
             df <- if (is.na(match(0, df$time))) {
-              # if time 0 is not included in the estimate
-              # time-prob (i.e., no events occur at time 0),
-              # then add time = 0 and prob = 1
+              # if time 0 is not included in the estimated time-prob (i.e., no
+              # events occur at time 0), then add time = 0 and prob = 1
               df %>%
                 dplyr::bind_rows(
                   dplyr::tribble(
@@ -210,7 +204,7 @@ prepare_survfit <- function(surv_obj) {
       )
   }
 
-  out <- out %>%
+  out %>%
     dplyr::mutate(
       plot_ci_d = purrr::map(
         data,
@@ -222,7 +216,6 @@ prepare_survfit <- function(surv_obj) {
         }
       )
     )
-  return(out)
 }
 
 #' @title add_atrisk
