@@ -83,3 +83,27 @@ test_that("show_cif() ribbon equals the old manual stepping", {
     expect_equal(grp$ymax, ref$conf_high)
   }
 })
+
+# Master-captured baseline: ribbon layer_data recorded by running the
+# PRE-refactor master code (fixture ribbon_step_baseline.rds). Unlike the
+# tests above, these reference values do not flow through the current
+# prepare_survfit(), so they break any oracle circularity: they pin the
+# drawn ribbons to what master actually rendered, exactly (tolerance = 0).
+baseline_ribbon <- readRDS(testthat::test_path("fixtures", "ribbon_step_baseline.rds"))
+
+extract_ribbon <- function(p) {
+  ld <- ribbon_layer_data(p)
+  data.frame(x = ld$x, ymin = ld$ymin, ymax = ld$ymax, group = ld$group)
+}
+
+test_that("show_surv()/show_cif() ribbons are exactly identical to the master-captured baseline", {
+  p_surv <- suppressMessages(show_surv(fit, add_ci = TRUE, add_atrisk = FALSE,
+                                       add_pvalue = FALSE, print_fig = FALSE))
+  expect_equal(extract_ribbon(p_surv), baseline_ribbon$surv, tolerance = 0)
+  p_cdf <- suppressMessages(show_surv(fit, plot_cdf = TRUE, add_ci = TRUE, add_atrisk = FALSE,
+                                      add_pvalue = FALSE, print_fig = FALSE))
+  expect_equal(extract_ribbon(p_cdf), baseline_ribbon$cdf, tolerance = 0)
+  p_cif <- suppressMessages(show_cif(fit_cr, add_ci = TRUE, add_atrisk = FALSE,
+                                     add_pvalue = FALSE, print_fig = FALSE))
+  expect_equal(extract_ribbon(p_cif), baseline_ribbon$cif, tolerance = 0)
+})

@@ -64,7 +64,8 @@ test_that("stairstep_ribbon() returns 0- and 1-row input unchanged", {
 })
 
 test_that("stairstep_ribbon() rejects an invalid direction", {
-  expect_error(fanetc:::stairstep_ribbon(roc, direction = "diagonal"))
+  expect_error(fanetc:::stairstep_ribbon(roc, direction = "diagonal"),
+               "should be one of")
 })
 
 # ---- geom_ribbon_step() layer behavior ----
@@ -122,10 +123,23 @@ test_that("geom_ribbon_step() supports direction = 'vh' and 'mid' at layer level
 })
 
 test_that("geom_ribbon_step() rejects an invalid direction at construction", {
-  expect_error(geom_ribbon_step(direction = "diagonal"))
+  expect_error(geom_ribbon_step(direction = "diagonal"), "should be one of")
 })
 
 test_that("geom_ribbon_step() errors informatively when ymin/ymax are not mapped", {
   p <- ggplot(roc, aes(x)) + geom_ribbon_step()
   expect_error(ggplot_build(p), "ymin")
+})
+
+test_that("geom_ribbon_step() handles 0- and 1-row layers through the full lifecycle", {
+  one <- roc[1, ]
+  p1 <- ggplot(one, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step()
+  ld1 <- layer_data(p1)
+  expect_equal(nrow(ld1), 1)
+  expect_equal(ld1$x, one$x)
+  expect_equal(ld1$ymin, one$ymin)
+  expect_equal(ld1$ymax, one$ymax)
+  p0 <- ggplot(roc[0, ], aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step()
+  expect_silent(ggplot_build(p0))
+  expect_equal(nrow(layer_data(p0)), 0)
 })

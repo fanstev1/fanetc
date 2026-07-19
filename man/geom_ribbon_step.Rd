@@ -39,6 +39,9 @@ for confidence bands around step curves such as Kaplan-Meier, cumulative
 incidence or ROC curves. Within each group the data are sorted by x before
 the steps are built, so the input row order does not matter. Rows with NA
 ymin/ymax are kept and yield gaps in the ribbon, as in geom_ribbon().
+Unlike geom_ribbon(), the flipped orientation is not supported: the ribbon
+must be vertical, with ymin and ymax supplied as aesthetics (no horizontal
+y/xmin/xmax ribbons).
 }
 \examples{
 library(ggplot2)
