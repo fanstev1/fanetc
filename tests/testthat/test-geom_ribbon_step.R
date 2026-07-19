@@ -66,3 +66,66 @@ test_that("stairstep_ribbon() returns 0- and 1-row input unchanged", {
 test_that("stairstep_ribbon() rejects an invalid direction", {
   expect_error(fanetc:::stairstep_ribbon(roc, direction = "diagonal"))
 })
+
+# ---- geom_ribbon_step() layer behavior ----
+
+test_that("geom_ribbon_step() is a drop-in for geom_ribbon() with stepped output", {
+  p <- ggplot(roc, aes(x, ymin = ymin, ymax = ymax)) +
+    geom_ribbon_step(alpha = .3, fill = "steelblue")
+  ld <- layer_data(p)
+  ref <- ref_step_hv(roc)
+  expect_equal(ld$x, ref$x)
+  expect_equal(ld$ymin, ref$ymin)
+  expect_equal(ld$ymax, ref$ymax)
+  expect_equal(unique(ld$fill), "steelblue")
+})
+
+test_that("geom_ribbon_step() output does not depend on input row order", {
+  set.seed(1)
+  shuffled <- roc[sample(nrow(roc)), ]
+  p_sorted <- ggplot(roc, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step()
+  p_shuffled <- ggplot(shuffled, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step()
+  expect_equal(layer_data(p_shuffled), layer_data(p_sorted))
+})
+
+test_that("geom_ribbon_step() steps each group independently", {
+  two <- rbind(transform(roc, g = "a"),
+               transform(roc, ymin = ymin / 2, ymax = ymax / 2, g = "b"))
+  p <- ggplot(two, aes(x, ymin = ymin, ymax = ymax, fill = g)) + geom_ribbon_step()
+  ld <- layer_data(p)
+  for (i in 1:2) {
+    ref <- ref_step_hv(two[two$g == c("a", "b")[i], ])
+    grp <- ld[ld$group == i, ]
+    expect_equal(grp$x, ref$x)
+    expect_equal(grp$ymin, ref$ymin)
+    expect_equal(grp$ymax, ref$ymax)
+  }
+})
+
+test_that("geom_ribbon_step() keeps NA limits as gaps, without warnings", {
+  withna <- roc
+  withna$ymin[3] <- NA
+  p <- ggplot(withna, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step()
+  expect_silent(ld <- layer_data(p))
+  # hv holds row 3 over two step segments, so its NA appears twice
+  expect_equal(nrow(ld), 2 * nrow(withna) - 1)
+  expect_equal(sum(is.na(ld$ymin)), 2)
+})
+
+test_that("geom_ribbon_step() supports direction = 'vh' and 'mid' at layer level", {
+  p_vh <- ggplot(roc, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step(direction = "vh")
+  expect_equal(layer_data(p_vh)$ymax,
+               fanetc:::stairstep_ribbon(roc, direction = "vh")$ymax)
+  p_mid <- ggplot(roc, aes(x, ymin = ymin, ymax = ymax)) + geom_ribbon_step(direction = "mid")
+  expect_equal(layer_data(p_mid)$x,
+               fanetc:::stairstep_ribbon(roc, direction = "mid")$x)
+})
+
+test_that("geom_ribbon_step() rejects an invalid direction at construction", {
+  expect_error(geom_ribbon_step(direction = "diagonal"))
+})
+
+test_that("geom_ribbon_step() errors informatively when ymin/ymax are not mapped", {
+  p <- ggplot(roc, aes(x)) + geom_ribbon_step()
+  expect_error(ggplot_build(p), "ymin")
+})
