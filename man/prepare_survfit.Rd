@@ -20,7 +20,8 @@ The function converts a survfit (Kaplan-Meier) or survfitms (multi-state /
 competing risks) object into a nested tibble with one row per stratum (and, for
 survfitms, per state), used by show_surv() and show_cif(). Each row carries the
 tidy estimates (data), the step-curve coordinates including a time-0 anchor
-(plot_prob_d), and the confidence-band coordinates (plot_ci_d). The
+(plot_prob_d), and the raw per-time confidence limits (plot_ci_d), which
+show_surv() and show_cif() draw as step ribbons via geom_ribbon_step(). The
 censored/reference placeholder state that survfit emits ("(s0)", or "" on some
 versions) is relabeled "0" and set as the reference level.
 }
