@@ -315,6 +315,19 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
   out
 }
 
+# Build a survfit() call with the data frame embedded literally, so downstream
+# helpers (run_logrank_test(), run_gray_test()) can re-evaluate fit$call. The
+# stored call keeps unqualified survfit/Surv symbols, exactly as the historical
+# versions produced via substitute().
+.survfit_call<- function(df, evt_time, evt, group, extra_args= list()) {
+  rhs<- if (rlang::quo_is_missing(group)) 1 else rlang::quo_get_expr(group)
+  rlang::expr(
+    survfit(Surv(!!rlang::quo_get_expr(evt_time), !!rlang::quo_get_expr(evt)) ~ !!rhs,
+            data = !!df,
+            !!!extra_args)
+  )
+}
+
 #' @title estimate_km
 #'
 #' @details
@@ -331,46 +344,12 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
 #' @return a survfit object whose call embeds the input data, so run_logrank_test() can re-evaluate it
 #' @export
 estimate_km<- function(df, evt_time, evt, group, ci_transformation = "log-log", ...) {
-
-  evt_time <- rlang::enquo(evt_time)
-  evt <- rlang::enquo(evt)
-  group <- rlang::enquo(group)
-  args_surfit <- rlang::enquos(...)
-
-  out <- if (quo_is_missing(group)) {
-    rlang::quo_squash(
-      rlang::quo(
-        substitute(
-          survfit(Surv(!!evt_time, !!evt) ~ 1,
-            data = df,
-            conf.type = ci_type,
-            !!!args_surfit
-          ),
-          list(
-            df = df,
-            ci_type = ci_transformation
-          )
-        )
-      )
-    )
-  } else {
-    rlang::quo_squash(
-      rlang::quo(
-        substitute(
-          survfit(Surv(!!evt_time, !!evt) ~ !!group,
-            data = df,
-            conf.type = ci_type,
-            !!!args_surfit
-          ),
-          list(
-            df = df,
-            ci_type = ci_transformation
-          )
-        )
-      )
-    )
-  }
-  return(eval(eval(out)))
+  cl<- .survfit_call(
+    df, rlang::enquo(evt_time), rlang::enquo(evt), rlang::enquo(group),
+    extra_args = c(list(conf.type = ci_transformation),
+                   lapply(rlang::enquos(...), rlang::quo_get_expr))
+  )
+  eval(cl)
 }
 
 #' @title run_logrank_test
@@ -549,25 +528,11 @@ show_surv<- function(surv_obj,
 #' @return a survfitms object whose call embeds the input data, so run_gray_test() can re-evaluate it
 #' @export
 estimate_cif<- function(df, evt_time, evt, group, ...) {
-
-  evt_time<- enquo(evt_time)
-  evt     <- enquo(evt)
-  group   <- enquo(group)
-
-  out<- if (quo_is_missing(group)) {
-    substitute(survfit(Surv(evt_time, evt) ~ 1, data= df, ...),
-               list(evt_time= quo_get_expr(evt_time),
-                    evt     = quo_get_expr(evt),
-                    df      = df))
-  } else {
-    substitute(survfit(Surv(evt_time, evt) ~ grp, data= df, ...),
-               list(evt_time= quo_get_expr(evt_time),
-                    evt     = quo_get_expr(evt),
-                    grp     = quo_get_expr(group),
-                    df      = df))
-  }
-  out<- eval(out)
-  out
+  cl<- .survfit_call(
+    df, rlang::enquo(evt_time), rlang::enquo(evt), rlang::enquo(group),
+    extra_args = lapply(rlang::enquos(...), rlang::quo_get_expr)
+  )
+  eval(cl)
 }
 
 
