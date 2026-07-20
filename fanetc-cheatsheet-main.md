@@ -52,6 +52,7 @@ All 12 fanetc-exported functions the skills call are present on master. `Cs()` i
 ### estimate_cif(df, evt_time, evt, group, ...)
 - Fits a multi-state (Aalen-Johansen) cumulative-incidence curve; `evt` is the **competing-risk factor**, event of interest = its first non-reference level.
 - Same call-storage trick so `run_gray_test()` can re-evaluate it.
+- Internals: `estimate_km()` and `estimate_cif()` share the non-exported `.survfit_call()` builder.
 
 ### show_cif(surv_obj, evt_type = 1, evt_label = <recode_factor fn>, add_ci = TRUE, add_atrisk = TRUE, add_legend = FALSE, add_pvalue = TRUE, atrisk_init_pos = NULL, pvalue_pos = c(...), plot_theme = theme_minimal(), x_lab = "Time", y_lab = "Proportion of subjects", x_lim = NULL, y_lim = NULL, x_break = NULL, y_break = NULL, color_scheme = c("brewer","grey","viridis","manual"), color_list = NULL, plot_cdf = FALSE, print_fig = TRUE)
 - Plots CIF curve(s) from `estimate_cif()`'s output; `surv_obj` is the first (piped) arg.

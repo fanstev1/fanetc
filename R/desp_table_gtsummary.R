@@ -75,9 +75,6 @@
 #' table_one(df, group = group, datadic = datadic, add_p = TRUE)
 #'
 #' @export
-#' @importFrom gtsummary tbl_summary add_p add_overall modify_header as_flex_table
-#' @importFrom dplyr select mutate filter across where pull
-#' @importFrom rlang enquo quo_is_missing quo_name
 #'
 table_one <- function(df,
                       group,

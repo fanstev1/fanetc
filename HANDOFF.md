@@ -1,5 +1,22 @@
 # Hand-off note — updated 2026-07-19 (geom_ribbon_step)
 
+## Maintainability refactor (2026-07-19)
+
+- All `R/` files received a behavior-preserving maintainability refactor following
+  `docs/superpowers/plans/2026-07-19-maintainability-refactor.md`; exported APIs
+  remain unchanged.
+- The `lazyeval` and `reshape2` dependencies were removed.
+- Two sanctioned crash-to-works improvements are included: `add_atrisk()` no
+  longer errors when its theme text settings are `NULL`, and
+  `admin_censor_cmprisk()` no longer crashes for every non-`NULL`
+  `adm_cnr_time` (v1.0.0's broken braced pipe produced "`:=` can only be used
+  within dynamic dots"). `decimalplaces()` also normalizes its empty-input edge
+  result from `integer(0)` to `0L`.
+- The new `show_cif_shapes_baseline.rds`, `atrisk_baseline.rds`, and
+  `summarize_baseline.rds` fixtures live under `tests/testthat/fixtures/` with
+  their respective `make_*_baseline.R` scripts. Regenerate them only from the
+  pre-refactor code identified by those scripts, never from current code.
+
 ## Latest: geom_ribbon_step() — step-function CI ribbons (2026-07-19)
 
 Merged to `master` and pushed to origin (`0c67296..3131279`, merge commit
