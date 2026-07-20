@@ -10,72 +10,44 @@
 #' @export
 extract_atrisk <- function(fit, time.list = NULL, time.scale = 1) {
   if (is.null(time.list)) {
-    time.list <- c(fit$t0, max(fit$time / time.scale))
-    time.list <- pretty(time.list)
+    time.list <- pretty(c(fit$t0, max(fit$time / time.scale)))
   }
   time.list <- sort(c(fit$t0, time.list[time.list > fit$t0 & time.list <= max(fit$time / time.scale)]))
 
-  if (any(names(fit) == "strata")) {
-    strata_lab <- sapply(strsplit(names(fit$strata), "="), function(x) x[2])
-
-    x <- data.frame(
-      time = fit$time / time.scale,
-      n.risk = if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
-      strata = factor(
-        unlist(
-          mapply(rep, x = seq_along(fit$strata), each = fit$strata, SIMPLIFY = FALSE)
-        ),
-        seq_along(fit$strata),
-        labels = strata_lab
-      )
-    )
-
-    # create a list of right continuous piecewise contant function for the at risk process in each strata
-    # Steve note: have to fix the following line `rule` for data with delayed entries.
-    # approxfun(x= time, y= n.risk, method= "constant", rule = 1:1, f= 1)
-    atRisk <- lapply(
-      split(x, x$strata),
-      function(df) {
-        with(
-          df,
-          approxfun(x = time, y = n.risk, method = "constant", rule = 2:1, f = 1)
-        )
-      }
-    )
-
-    atRiskPts <- rapply(atRisk,
-      function(ff) {
-        out <- ff(time.list)
-        replace(out, is.na(out), 0)
-      },
-      how = "unlist"
-    ) %>%
-      matrix(
-        nrow = length(time.list), byrow = FALSE,
-        dimnames = list(time.list, strata_lab)
-      )
-
-    # wide, plain data.frame (time + one integer column per stratum) -- the shape
-    # add_atrisk() consumes
-    atRiskPts <- replace(atRiskPts, is.na(atRiskPts), 0)
-    storage.mode(atRiskPts) <- "integer"
-    atRiskPts <- data.frame(time = time.list, atRiskPts, check.names = FALSE, row.names = NULL)
+  has_strata <- "strata" %in% names(fit)
+  strata_lab <- if (has_strata) {
+    sapply(strsplit(names(fit$strata), "="), function(x) x[2])
   } else {
-    # no strata - single group
-    x <- data.frame(
-      time = fit$time / time.scale,
-      n.risk = if (is.matrix(fit$n.risk)) apply(fit$n.risk, 1, sum) else fit$n.risk,
-      strata = factor(1, 1, labels = "Overall")
-    )
-
-    atRisk <- with(x, approxfun(x = time, y = n.risk, method = "constant", rule = 2:1, f = 1))
-    atRiskPts <- atRisk(time.list)
-    atRiskPts <- data.frame(
-      time = time.list,
-      Overall = as.integer(replace(atRiskPts, is.na(atRiskPts), 0))
-    )
+    "Overall"
   }
-  return(atRiskPts)
+
+  x <- data.frame(
+    time = fit$time / time.scale,
+    n.risk = if (is.matrix(fit$n.risk)) rowSums(fit$n.risk) else fit$n.risk,
+    strata = if (has_strata) {
+      factor(rep(seq_along(fit$strata), fit$strata), seq_along(fit$strata), labels = strata_lab)
+    } else {
+      factor(rep(1, length(fit$time)), 1, labels = "Overall")
+    }
+  )
+
+  # right-continuous piecewise-constant at-risk process per stratum
+  # Steve note: have to fix `rule` for data with delayed entries:
+  # approxfun(x= time, y= n.risk, method= "constant", rule = 1:1, f= 1)
+  atRiskPts <- vapply(
+    split(x, x$strata),
+    function(df) {
+      ff <- approxfun(x = df$time, y = df$n.risk, method = "constant", rule = 2:1, f = 1)
+      as.integer(replace(ff(time.list), is.na(ff(time.list)), 0))
+    },
+    integer(length(time.list))
+  )
+  atRiskPts <- matrix(atRiskPts, nrow = length(time.list),
+                      dimnames = list(NULL, strata_lab))
+
+  # wide, plain data.frame (time + one integer column per stratum) -- the shape
+  # add_atrisk() consumes
+  data.frame(time = time.list, atRiskPts, check.names = FALSE, row.names = NULL)
 }
 
 
@@ -238,15 +210,10 @@ prepare_survfit <- function(surv_obj) {
 add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_theme = NULL) {
 
   # ---- get font information ----
-  if (is.null(plot_theme)) {
-    font_family<- "Arial"
-    font_face  <- "plain"
-    font_size  <- 11
-  } else {
-    font_family<- if (is.null(plot_theme$text$family) | trimws(plot_theme$text$family) == "") "Arial" else plot_theme$text$family
-    font_face  <- if (is.null(plot_theme$text$face) | trimws(plot_theme$text$face) == "") "plain" else plot_theme$text$face
-    font_size  <- if (is.null(plot_theme$text$size)) 11 else plot_theme$text$size
-  }
+  theme_text<- if (is.null(plot_theme)) NULL else plot_theme$text
+  font_family<- if (is.null(theme_text$family) || trimws(theme_text$family) == "") "Arial" else theme_text$family
+  font_face  <- if (is.null(theme_text$face)   || trimws(theme_text$face) == "") "plain" else theme_text$face
+  font_size  <- if (is.null(theme_text$size)) 11 else theme_text$size
 
   #---- get parameters required for where to include the at-risk table ----#
   atrisk_row_inc<- 1.2 # lines between at-risk rows
@@ -260,13 +227,13 @@ add_atrisk<- function(p, surv_obj, x_break= NULL, atrisk_init_pos= NULL, plot_th
   }
 
   # I need to calculate the number of at-risk at the x_break
-  x_break     <- if (is.null(x_break)) {
-    layer_scales(p)$x$get_breaks(layer_scales(p)$x$range$range)
+  x_range<- layer_scales(p)$x$range$range
+  x_break<- if (is.null(x_break)) {
+    layer_scales(p)$x$get_breaks(x_range)
   } else {
-    x_break[x_break >= min(layer_scales(p)$x$range$range) & x_break<= max(layer_scales(p)$x$range$range)]
+    x_break[x_break >= min(x_range) & x_break <= max(x_range)]
   }
-
-  x_break<- if (any(is.na(x_break))) x_break[!is.na(x_break)] else x_break
+  x_break<- x_break[!is.na(x_break)]
 
 
   risk_tbl<- extract_atrisk(surv_obj, time.list= x_break)
