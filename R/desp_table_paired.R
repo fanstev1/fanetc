@@ -293,6 +293,10 @@ table_one_paired <- function(df, pair_id, group,
 
   desc_data <- data[, include_names, drop = FALSE]
 
+  # table_one() used to be reached via eval(call2("table_one", ...)), so its
+  # set.seed(0) fired at this point; calling .table_one_impl() directly
+  # bypasses that -- reproduce the same RNG side effect here.
+  set.seed(0)
   tbl <- .table_one_impl(
     desc_data,
     group_name = group_name,

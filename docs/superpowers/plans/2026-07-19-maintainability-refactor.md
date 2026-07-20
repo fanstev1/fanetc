@@ -1820,6 +1820,25 @@ git commit -m "refactor: share event-variable finalization between construct_sur
 
 ---
 
+> **Post-Task-13 fix round (2026-07-19, whole-branch review):** an independent
+> Codex review of the finished branch raised three "Important" findings.
+> Reconciled by the coordinator, each verified empirically before acting:
+> (1) claimed `show_cif()` legend-title regression from `.data[[series_col]]`
+> — REFUTED: `rlang::as_label()` special-cases `.data[["x"]]` to label
+> identically to a bare `x` column, confirmed with a direct ggplot2 A/B test;
+> no fix needed. (2) `table_one_paired()` silently lost the `set.seed(0)`
+> side effect it used to trigger indirectly via `eval(call2("table_one", ...))`
+> — CONFIRMED (empirically: RNG state was provably left untouched); fixed by
+> adding `set.seed(0)` in `table_one_paired()` at the equivalent point, with a
+> regression test. (3) `decimalplaces()`'s rewrite changes behavior on two
+> edges beyond the one this plan explicitly sanctioned (`Inf`/`NaN` input
+> previously erroring, now `0L`; non-integer `max_dec` now coerced via
+> `as.integer()`) — CONFIRMED via direct old-vs-new comparison, but no call
+> site in the package exercises either input, and both changes are robustness
+> improvements in the same spirit as this branch's two already-sanctioned
+> crash fixes; kept as-is and documented fully in HANDOFF.md rather than
+> reverted, with characterization tests added.
+
 ### Task 13: Namespace hygiene, docs regeneration, final verification
 
 **Files:**

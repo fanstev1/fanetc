@@ -10,8 +10,18 @@
   longer errors when its theme text settings are `NULL`, and
   `admin_censor_cmprisk()` no longer crashes for every non-`NULL`
   `adm_cnr_time` (v1.0.0's broken braced pipe produced "`:=` can only be used
-  within dynamic dots"). `decimalplaces()` also normalizes its empty-input edge
-  result from `integer(0)` to `0L`.
+  within dynamic dots").
+- `decimalplaces()`'s rewrite is more robust at its edges, discovered during
+  the branch's final whole-branch review: (1) an all-scientific-notation
+  fractional input, which previously returned a zero-length `integer(0)` via
+  out-of-bounds indexing, now returns `0L`; (2) non-finite input (`Inf`,
+  `-Inf`, `NaN`), which previously errored ("missing value where TRUE/FALSE
+  needed"), now returns `0L`; (3) a non-integer `max_dec` (e.g. `2.9`), which
+  previously could return a fractional decimal-place count via `pmin.int()`,
+  is now coerced with `as.integer()` first. No call site in this package ever
+  exercises any of these three inputs (`numeric(0)`, the only edge that
+  already returned `0L` pre-rewrite, is unaffected). All three are pinned in
+  `tests/testthat/test-decimalplaces.R`.
 - The new `show_cif_shapes_baseline.rds`, `atrisk_baseline.rds`, and
   `summarize_baseline.rds` fixtures live under `tests/testthat/fixtures/` with
   their respective `make_*_baseline.R` scripts. Regenerate them only from the

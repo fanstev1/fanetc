@@ -577,3 +577,20 @@ test_that("smd: 2-level FACTOR categorical SMD is NOT negated either (not just 3
   expect_equal(smd_2c, smd_2f)
 })
 
+
+test_that("table_one_paired() resets the RNG to seed 0, matching table_one()'s side effect", {
+  # table_one_paired() used to reach table_one() (and its set.seed(0)) via
+  # eval(call2("table_one", ...)); the direct .table_one_impl() call must
+  # reproduce the same observable RNG side effect.
+  n <- 20
+  dpaired <- data.frame(pid = rep(1:n, each = 2),
+                        visit = rep(c("Baseline", "Followup"), n),
+                        age = rnorm(2 * n, 55, 8))
+  set.seed(999)
+  invisible(table_one_paired(dpaired, pair_id = pid, group = visit,
+                             add_p = FALSE, add_smd = FALSE, add_n_pairs = FALSE))
+  after <- runif(1)
+  set.seed(0)
+  expected <- runif(1)
+  expect_equal(after, expected)
+})
