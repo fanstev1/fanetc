@@ -75,3 +75,22 @@ test_that("add_atrisk: existing coord ylim preserved", {
   out_lim <- add_atrisk(p_lim, fit, x_break = breaks)
   expect_equal(panel_ranges(p_lim)$y, panel_ranges(out_lim)$y)
 })
+
+test_that("extract_atrisk() matches the pre-refactor baseline exactly", {
+  atrisk_baseline<- readRDS(testthat::test_path("fixtures", "atrisk_baseline.rds"))
+  fit_grp<- estimate_km(survival::lung, evt_time = time, evt = status, group = sex)
+  fit_all<- estimate_km(survival::lung, evt_time = time, evt = status)
+  expect_equal(extract_atrisk(fit_grp), atrisk_baseline$strata_default, tolerance = 0)
+  expect_equal(extract_atrisk(fit_grp, time.list = c(100, 300, 500)),
+               atrisk_baseline$strata_times, tolerance = 0)
+  expect_equal(extract_atrisk(fit_all), atrisk_baseline$overall_default, tolerance = 0)
+  expect_equal(extract_atrisk(fit_all, time.list = 0:2, time.scale = 365.25),
+               atrisk_baseline$overall_scaled, tolerance = 0)
+})
+
+test_that("add_atrisk() falls back to font defaults when plot_theme has no text element", {
+  fit<- estimate_km(survival::lung, evt_time = time, evt = status, group = sex)
+  p<- suppressMessages(show_surv(fit, add_ci = FALSE, add_atrisk = FALSE,
+                                 add_pvalue = FALSE, print_fig = FALSE))
+  expect_s3_class(add_atrisk(p, fit, plot_theme = theme()), "ggplot")
+})

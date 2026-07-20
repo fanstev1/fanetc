@@ -15,53 +15,29 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
   ss<- summary(fit, times= if (is.null(times)) pretty(fit$time) else times, extend = TRUE)
 
   if (failure_fun) {
-    ff<- 1 - ss$surv
-    ll<- 1 - ss$upper
-    uu<- 1 - ss$lower
-
-    ss$surv<- ff
-    ss$lower<- ll
-    ss$upper<- uu
+    # failure function: 1 - S(t); the CI bounds swap sides
+    ss[c("surv", "lower", "upper")]<- list(1 - ss$surv, 1 - ss$upper, 1 - ss$lower)
   }
 
-  out <- ss %$%
-    {
-      if (any(names(ss) == "strata")) {
-        tibble(
-          strata = strata,
-          time = time,
-          surv = surv,
-          conf_low = lower,
-          conf_high = upper
-        )
-      } else {
-        tibble(
-          time = time,
-          surv = surv,
-          conf_low = lower,
-          conf_high = upper
-        )
-      }
-    } %>%
+  has_strata<- "strata" %in% names(ss)
+
+  dplyr::tibble(
+    strata   = if (has_strata) gsub("^.*=", "", ss$strata) else "Overall",
+    time     = ss$time,
+    surv     = ss$surv,
+    conf_low = ss$lower,
+    conf_high= ss$upper
+  ) %>%
     dplyr::mutate(
       stat = case_when(
         is.na(surv) ~ "---",
-        !is.na(surv) & is.na(conf_low) & is.na(conf_high) ~ sprintf("%3.1f%% [---]", surv * 100),
-        !is.na(surv) & is.na(conf_low) & !is.na(conf_high) ~ sprintf("%3.1f%% [---, %3.1f%%]", surv * 100, conf_high * 100),
-        !is.na(surv) & !is.na(conf_low) & is.na(conf_high) ~ sprintf("%3.1f%% [%3.1f%%, ---]", surv * 100, conf_low * 100),
+        is.na(conf_low) & is.na(conf_high) ~ sprintf("%3.1f%% [---]", surv * 100),
+        is.na(conf_low)  ~ sprintf("%3.1f%% [---, %3.1f%%]", surv * 100, conf_high * 100),
+        is.na(conf_high) ~ sprintf("%3.1f%% [%3.1f%%, ---]", surv * 100, conf_low * 100),
         TRUE ~ sprintf("%3.1f%% [%3.1f%%, %3.1f%%]", surv * 100, conf_low * 100, conf_high * 100)
       )
     ) %>%
-    {
-      if (any(names(ss) == "strata")) {
-        dplyr::mutate(., strata = gsub("^.*=", "", strata))
-      } else {
-        dplyr::mutate(., strata = "Overall")
-      }
-    } %>%
-    pivot_wider(., id_cols = time, names_from = strata, values_from = stat)
-
-  out
+    pivot_wider(id_cols = time, names_from = strata, values_from = stat)
 }
 
 
@@ -77,49 +53,43 @@ summarize_km<- function(fit, times= NULL, failure_fun= FALSE) {
 #' @export
 summarize_cif<- function(fit, times= NULL) {
   ss <- summary(fit, times = if (is.null(times)) pretty(fit$time) else times, extend = TRUE)
-  colnames(ss$pstate) <-
-    colnames(ss$lower) <-
-    colnames(ss$upper) <- replace(ss$state, sapply(ss$states, nchar) == 0, "0")
-  # if (is.null(ss$prev)) ss$prev<- ss$pstate
+  # relabel survfit's placeholder censor state ("" on some versions) as "0";
+  # NB the historical code wrote ss$state, which reached ss$states only via
+  # partial matching -- keep the semantics, spell it out
+  state_levels <- replace(ss$states, sapply(ss$states, nchar) == 0, "0")
+  colnames(ss$pstate) <- colnames(ss$lower) <- colnames(ss$upper) <- state_levels
 
-  out<- if (any(names(fit)=="strata")) {
+  has_strata<- "strata" %in% names(fit)
+  id_cols<- c(if (has_strata) "strata", "times")
 
-    ss %$%
-      map2(.x= c('pstate', 'conf_low', 'conf_high'),
-           .y= list(pstate= pstate, lower= lower, upper= upper),
-           .f= function(var, mat, ...) {
-             mat %>%
-               as.data.frame() %>%
-               mutate(strata= strata,
-                      times = time) %>%
-               melt(id.vars= c('strata', 'times'),
-                    value.name = var,
-                    variable.name = 'states')
-           }) %>%
-      reduce(full_join, by = c('strata', 'times', 'states')) %>%
-      mutate_at(vars(one_of('pstate', 'conf_low', 'conf_high')),
-                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(pstate, " [", conf_low, ", ", conf_high, "]")) %>%
-      dcast(times ~ states + strata, value.var = 'stat')
+  long<- purrr::map2(
+    list(pstate= ss$pstate, conf_low= ss$lower, conf_high= ss$upper),
+    c("pstate", "conf_low", "conf_high"),
+    function(mat, var) {
+      d<- as.data.frame(mat)
+      d$times<- ss$time
+      if (has_strata) d$strata<- ss$strata
+      tidyr::pivot_longer(d, cols = all_of(state_levels),
+                          names_to = "states", values_to = var)
+    }
+  ) %>%
+    reduce(full_join, by = c(id_cols, "states")) %>%
+    mutate(across(all_of(c("pstate", "conf_low", "conf_high")),
+                  function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= ""))) %>%
+    mutate(stat= paste0(pstate, " [", conf_low, ", ", conf_high, "]"))
 
+  wide<- tidyr::pivot_wider(long, id_cols = "times",
+                            names_from = all_of(c("states", if (has_strata) "strata")),
+                            values_from = "stat", names_sep = "_")
+  wide<- wide[order(wide$times), ]
+
+  # match the historical wide-format column order:
+  # states-major (colnames order), strata varying fastest (survfit level order)
+  ordered_cols<- if (has_strata) {
+    as.vector(t(outer(state_levels, levels(factor(ss$strata)),
+                      function(s, g) paste(s, g, sep = "_"))))
   } else {
-
-    ss %$%
-      map2(.x= c('pstate', 'conf_low', 'conf_high'),
-           .y= list(pstate= pstate, lower= lower, upper= upper),
-           .f= function(var, mat, ...) {
-             mat %>%
-               as.data.frame() %>%
-               mutate(times = time) %>%
-               melt(id.vars= c('times'),
-                    value.name = var,
-                    variable.name = 'states')
-           }) %>%
-      reduce(full_join, by = c('times', 'states')) %>%
-      mutate_at(vars(one_of('pstate', 'conf_low', 'conf_high')),
-                function(x) paste(formatC(round(x, 3)*100, format= "f", digits= 1, flag= "#"), "%", sep= "")) %>%
-      mutate(stat= paste0(pstate, " [", conf_low, ", ", conf_high, "]")) %>%
-      dcast(times ~ states, value.var = 'stat')
+    state_levels
   }
-  out
+  as.data.frame(wide[, c("times", ordered_cols)])
 }

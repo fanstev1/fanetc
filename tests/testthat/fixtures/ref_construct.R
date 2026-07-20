@@ -90,7 +90,7 @@ construct_cmprisk_var<- function(df, patid, idx_dt, evt_dt, end_dt, cmprisk_varn
   if (quo_is_missing(patid))  stop("Please provide subject id")
 
   n_cmp_evt<- length(cmp_evt_dt)
-  names(cmp_evt_dt)<- sapply(cmp_evt_dt, lazyeval::as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
+  names(cmp_evt_dt)<- sapply(cmp_evt_dt, rlang::as_name) # without, dplyr::select(df, !!!cmp_evt_dt) changes the variable name in the output data
 
   cmp_evt_desc<- paste0('cmp_evt_', seq_len(n_cmp_evt) + 1)
   evt_desc<- c('evt_1', cmp_evt_desc, 'censored_0')

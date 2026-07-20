@@ -22,7 +22,7 @@ admin_censor_cmprisk(
 
 \item{adm_cnr_time}{a numeric vector specifying the time point at which administrative censoring is applied.}
 
-\item{evt_label}{a numeric vector specifying the time point at which administrative censoring is applied.}
+\item{evt_label}{an optional named vector mapping event codes (its names) to display labels; when given, the censored event variable is returned as a factor with these labels.}
 
 \item{overwrite_var}{a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.}
 }

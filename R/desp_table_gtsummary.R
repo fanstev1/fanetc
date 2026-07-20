@@ -75,9 +75,6 @@
 #' table_one(df, group = group, datadic = datadic, add_p = TRUE)
 #'
 #' @export
-#' @importFrom gtsummary tbl_summary add_p add_overall modify_header as_flex_table
-#' @importFrom dplyr select mutate filter across where pull
-#' @importFrom rlang enquo quo_is_missing quo_name
 #'
 table_one <- function(df,
                       group,
@@ -97,18 +94,45 @@ table_one <- function(df,
   set.seed(0) # For reproducibility of Fisher's exact test p-values
   continuous_stat <- match.arg(continuous_stat)
 
-  # Capture group variable (for NSE)
   group <- rlang::enquo(group)
   include <- rlang::enquo(include)
-
-  has_group <- !rlang::quo_is_missing(group)
-  has_include <- !rlang::quo_is_missing(include)
-
-  # datadic column selectors (unquoted symbols or strings, as in the old API)
   var_name <- rlang::enquo(var_name)
   var_desp <- rlang::enquo(var_desp)
-  name_col <- if (rlang::quo_is_missing(var_name)) "var_name" else rlang::as_name(var_name)
-  desp_col <- if (rlang::quo_is_missing(var_desp)) "var_desp" else rlang::as_name(var_desp)
+
+  .table_one_impl(
+    df,
+    group_name = if (rlang::quo_is_missing(group)) NULL else rlang::quo_name(group),
+    include_quo = if (rlang::quo_is_missing(include)) NULL else include,
+    datadic = datadic,
+    name_col = if (rlang::quo_is_missing(var_name)) "var_name" else rlang::as_name(var_name),
+    desp_col = if (rlang::quo_is_missing(var_desp)) "var_desp" else rlang::as_name(var_desp),
+    missing = missing, missing_text = missing_text,
+    missing_group_exclude = missing_group_exclude,
+    add_p = add_p, add_overall = add_overall, sort_by_p = sort_by_p,
+    continuous_stat = continuous_stat, pvalue_fun = pvalue_fun
+  )
+}
+
+# Implementation behind table_one(), taking resolved values: group_name/name_col/
+# desp_col are strings (or NULL), include_quo is a tidyselect quosure or NULL.
+# table_one_paired() calls this directly, bypassing NSE argument re-capture.
+.table_one_impl <- function(df,
+                            group_name = NULL,
+                            include_quo = NULL,
+                            datadic = NULL,
+                            name_col = "var_name",
+                            desp_col = "var_desp",
+                            missing = "ifany",
+                            missing_text = "(Missing)",
+                            missing_group_exclude = TRUE,
+                            add_p = NULL,
+                            add_overall = NULL,
+                            sort_by_p = FALSE,
+                            continuous_stat = "meansd",
+                            pvalue_fun = format_pvalue) {
+
+  has_group <- !is.null(group_name)
+
   if (!is.null(datadic) && !all(c(name_col, desp_col) %in% names(datadic))) {
     stop("`datadic` must contain columns `", name_col, "` and `", desp_col, "`")
   }
@@ -121,43 +145,29 @@ table_one <- function(df,
   df <- df %>%
       dplyr::ungroup() %>%
       # Remove character and date variables
-      dplyr::select(dplyr::where(~ !is.character(.) & !inherits(., "Date"))) %>%
+      dplyr::select(dplyr::where(~ !is.character(.) && !inherits(., "Date"))) %>%
       # Drop unused factor levels
-      dplyr::mutate_if(is.factor, forcats::fct_drop)
-  
-  df <- if (has_include & has_group) {
-    include_loc <- tidyselect::eval_select(include, df)
-    group_loc <- tidyselect::eval_select(group, df)
-    df[, sort(unique(c(group_loc, include_loc)))]
-  } else if (has_include & !has_group) {
-    include_loc <- tidyselect::eval_select(include, df)
-    df[, include_loc]
-  } else {
-    df # everything
+      dplyr::mutate(dplyr::across(dplyr::where(is.factor), forcats::fct_drop))
+
+  if (!is.null(include_quo)) {
+    include_loc <- tidyselect::eval_select(include_quo, df)
+    df <- if (has_group) {
+      group_loc <- match(group_name, names(df))
+      df[, sort(unique(c(group_loc, include_loc)))]
+    } else {
+      df[, include_loc]
+    }
   }
 
-  # Remove observations with missing group variable from summary if present
+  # Remove observations with a missing group value (or keep them as an
+  # explicit level); group_col is then simply the resulting column
   if (has_group) {
-    group_name <- rlang::quo_name(group)
-    group_col <- dplyr::pull(df, all_of(group_name))
-
-    # df <- df %>%
-    #   dplyr::select(-all_of(group_name)) %>%
-    #   dplyr::filter(!is.na(group_col)) %>%
-    #   dplyr::mutate(!!group_name := group_col)
-    df <- df %>% {
-        if (missing_group_exclude) {
-          dplyr::filter(., !is.na(!!group))
-        } else {
-          dplyr::mutate(., !!group := forcats::fct_na_value_to_level(!!group, level = missing_text))
-        }
-    }
-
-    group_col<- if (missing_group_exclude) {
-        group_col[!is.na(group_col)]
+    if (missing_group_exclude) {
+      df <- dplyr::filter(df, !is.na(.data[[group_name]]))
     } else {
-      forcats::fct_na_value_to_level(group_col, level = missing_text)
+      df <- dplyr::mutate(df, !!rlang::sym(group_name) := forcats::fct_na_value_to_level(.data[[group_name]], level = missing_text))
     }
+    group_col <- df[[group_name]]
   }
 
   # gtsummary requires glue strings for statistics; med_q1_q3 uses type-1
@@ -188,8 +198,7 @@ table_one <- function(df,
   # Build the base tbl_summary
   tbl <- gtsummary::tbl_summary(
     data = df,
-    by = if (has_group) rlang::quo_name(group) else NULL,
-    # include = if (has_group) -all_of(rlang::quo_name(group)) else everything(),
+    by = if (has_group) group_name else NULL,
     missing = missing,
     missing_text = missing_text,
     statistic = list(
@@ -206,66 +215,40 @@ table_one <- function(df,
       # gtsummary requires a named list (not a named vector)
       as.list(setNames(datadic[[desp_col]], datadic[[name_col]]))
     } else NULL
-  ) %>%
-    # Add p-values if comparing groups
-    {
-      if (add_p & has_group) {
-        # Determine number of groups to select appropriate statistical tests
-        # group_name <- rlang::quo_name(group)
-        # n_groups_val <- length(unique(dplyr::pull(df, all_of(group_name))))
-        n_groups_val <- length(unique(group_col))
+  )
 
-        # For continuous: choose based on continuous_stat
-        cont_test <- if (continuous_stat == "meansd") {
-          if (n_groups_val == 2) "t.test" else "oneway.test"
-        } else {
-          if (n_groups_val == 2) "wilcox.test" else "kruskal.test"
-        }
+  if (add_p && has_group) {
+    # Determine number of groups to select appropriate statistical tests
+    n_groups_val <- length(unique(group_col))
 
-        gtsummary::add_p(
-          .,
-          test = list(
-            all_continuous() ~ cont_test,
-            all_categorical() ~ "fisher.test"
-          ),
-          pvalue_fun = pvalue_fun,
-        #   test.args = list(
-        #     all_continuous() ~ list(var.equal = FALSE),
-        #     all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)
-        #   ),
-          test.args = list(all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)) %>% 
-          append(
-             if (continuous_stat == "meansd") list(all_continuous() ~ list(var.equal = FALSE)) else list()
-          )
-        )
-      } else {
-        .
-      }
-    } %>%
-    # Add overall column
-    {
-      if (add_overall & has_group) {
-        gtsummary::add_overall(.)
-      } else {
-        .
-      }
-    } %>%
-    # Sort by p-value if requested
-    {
-      if (sort_by_p & add_p & has_group) {
-        gtsummary::sort_p(.)
-      } else {
-        .
-      }
+    # For continuous: choose based on continuous_stat
+    cont_test <- if (continuous_stat == "meansd") {
+      if (n_groups_val == 2) "t.test" else "oneway.test"
+    } else {
+      if (n_groups_val == 2) "wilcox.test" else "kruskal.test"
     }
+
+    test_args <- c(
+      list(all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)),
+      if (continuous_stat == "meansd") list(all_continuous() ~ list(var.equal = FALSE))
+    )
+
+    tbl <- gtsummary::add_p(
+      tbl,
+      test = list(
+        all_continuous() ~ cont_test,
+        all_categorical() ~ "fisher.test"
+      ),
+      pvalue_fun = pvalue_fun,
+      test.args = test_args
+    )
+  }
+
+  if (add_overall && has_group) tbl <- gtsummary::add_overall(tbl)
+  if (sort_by_p && add_p && has_group) tbl <- gtsummary::sort_p(tbl)
 
   tbl
 }
-
-# table_one(df)
-# table_one(df, group = sex)
-# table_one(df, include = c(male, age))
-# table_one(df, group = sex, include = c(group, age))
 
 # Type-1 quantile statistics referenced by name in the tbl_summary() glue
 # string, matching the historical med_iqr() output

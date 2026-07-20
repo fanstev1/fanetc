@@ -10,31 +10,20 @@
 #' @return the most frequent number of digits in the variable
 #' @export
 decimalplaces <- function(x, max_dec= 4L) {
-  y<- x[!is.na(x)]
-  y<- round((y %% 1), 10)
+  frac<- round(x[!is.na(x)] %% 1, 10)
+  frac<- frac[frac != 0]
+  if (length(frac) == 0) return(0L)
 
-  if (length(y) == 0) {
-    out<- 0L
-  } else if (any((y %% 1) != 0)) {
+  # decimal digits of each fractional part, trailing zeros stripped; values
+  # whose character form has no "." (scientific notation) are ignored
+  txt<- gsub("0+$", "", as.character(frac))
+  parts<- strsplit(txt, ".", fixed = TRUE)
+  n_dec<- nchar(vapply(parts[lengths(parts) == 2L], `[`, "", 2L))
+  if (length(n_dec) == 0) return(0L)
 
-    # remove the trailing zero's
-    y<- gsub('0+$', '', as.character(y))
-
-    # split each number into 2 parts as characters - one before the decimal and the other after the decimal
-    # take the after-decimal part
-    info<- strsplit(y, ".", fixed=TRUE)
-    info<- info[ vapply(info, length, integer(1L) ) == 2]
-
-    n_dec<- nchar(unlist(info))[ 2 * (1:length(y)) ]
-    dec<- sort(table(n_dec))
-
-    # return( pmin.int(max_dec, as.integer( names(dec)[length(dec)])) )
-    out<- pmin.int(max_dec, as.integer( names(dec)[length(dec)]))
-
-  } else {
-    out<- 0L
-  }
-  out
+  counts<- table(n_dec)
+  modes<- as.integer(names(counts)[counts == max(counts)])
+  pmin.int(as.integer(max_dec), max(modes))
 }
 
 # format_pvalue() now lives in R/desp_table_gtsummary.R
@@ -51,19 +40,18 @@ decimalplaces <- function(x, max_dec= 4L) {
 #' @return a \code{wb} object
 #' @export
 updateWorksheet<- function(wb, sheetName, x, ...) {
-  if (!is.na(sheet_pos<- match(sheetName, names(wb), nomatch= NA))) {
+  sheet_exists<- sheetName %in% names(wb)
 
+  if (sheet_exists) {
     sheetOrder<- openxlsx::worksheetOrder(wb)
     names(sheetOrder)<- names(wb)
     openxlsx::removeWorksheet(wb, sheetName)
-    openxlsx::addWorksheet(wb, sheetName );
-    openxlsx::writeData(wb, sheetName, x)
-    openxlsx::worksheetOrder(wb)<- sheetOrder[names(wb)]
-
-  } else {
-    openxlsx::addWorksheet(wb, sheetName );
-    openxlsx::writeData(wb, sheetName, x)
   }
+
+  openxlsx::addWorksheet(wb, sheetName)
+  openxlsx::writeData(wb, sheetName, x)
+
+  if (sheet_exists) openxlsx::worksheetOrder(wb)<- sheetOrder[names(wb)]
   wb
 }
 
@@ -81,17 +69,16 @@ updateWorksheet<- function(wb, sheetName, x, ...) {
 #' @export
 summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) {
 
-  if (!any(class(mdl) %in% c("coxph", "coxph.penal"))) stop("Not a coxph or coxph.penal object.")
+  if (!inherits(mdl, c("coxph", "coxph.penal"))) stop("Not a coxph or coxph.penal object.")
 
   out<- summary(mdl, maxlabel= maxlabel)$coefficient %>%
     as.data.frame() %>%
     rownames_to_column("term")
 
-  if (any(class(mdl)== "coxph.penal")) {
+  if (inherits(mdl, "coxph.penal")) {
     out<- rename(out, se= 'se(coef)')
-  } else if (all(class(mdl)== "coxph")) {
+  } else if (identical(class(mdl), "coxph")) {
     out<- rename(out, se= 'se(coef)', p= 'Pr(>|z|)')
-    # names(out)[grep("^p", names(out), ignore.case = TRUE)]<- "p"
   }
 
   out<- out %>%
@@ -105,7 +92,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
                                formatC(conf_low, format= "f", digits= 3, flag= "#"), ", ",
                                formatC(conf_high, format= "f", digits= 3, flag= "#"), "]")),
            pval= format_pvalue(p)) %>%
-    dplyr::select(one_of(c("term", "stat", "pval")))
+    dplyr::select(all_of(c("term", "stat", "pval")))
 
   type3_coxph<- function(mdl, beta_var= vcov(mdl)) {
     x<- model.matrix(mdl)
@@ -124,7 +111,7 @@ summarize_coxph<- function(mdl, exponentiate= TRUE, maxlabel= 100, alpha= 0.05) 
                    # calculate Wald's test statistics and p-value
                    wald_stat<- as.numeric( t(cc) %*% solve(vv) %*% cc )
                    pval<- pchisq(wald_stat,
-                                 df= if (any(class(mdl)=="coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
+                                 df= if (inherits(mdl, "coxph.penal") && !is.na(mdl$df[i])) mdl$df[i] else df,
                                  lower.tail = FALSE)
 
                    data.frame(df= round(df, 0), stat= wald_stat, chisq_p= pval)
@@ -179,10 +166,9 @@ calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
 
   # to calulate the type 3 error
   # Li, Meng, Raghunathan and Rubin. Significance levels from repeated p-values with multiply-imputed data. Statistica Sinica (1991)
-  # x<- model.matrix(mira_obj$analyses[[1]])
-  x<- model.matrix(tmp<- mice::getfit(mira_obj, 1L))
+  first_fit<- mice::getfit(mira_obj, 1L)
+  x<- model.matrix(first_fit)
   varseq<- attr(x, "assign")
-  df<- sapply(split(varseq, varseq), length)
   m <- length(mira_obj$analyses)
 
   # coef estimate and its vcov for each MI model
@@ -220,7 +206,7 @@ calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
 
                  pval<- pf(wald_stat, df1= df, df2= df_denominator, lower.tail= FALSE)
 
-                 out<- data.frame(var= if (i==0) '(Intercept)' else attr(tmp$terms, "term.labels")[i],
+                 out<- data.frame(var= if (i==0) '(Intercept)' else attr(first_fit$terms, "term.labels")[i],
                                   rid = i,
                                   df= round(df, 0),
                                   stat= wald_stat,
@@ -231,6 +217,18 @@ calculate_type3_mi<- function(mira_obj, vcov_fun= NULL) {
                  out
                })
   out
+}
+
+# shared by summarize_mi_glm()/summarize_mi_coxph(): design-matrix term index
+# carried in the "col_in_X" attributes, and the final type3-row append/ordering
+.mi_term_index<- function(type3_list) {
+  dplyr::bind_rows(lapply(type3_list, function(x) attr(x, "col_in_X")))
+}
+.bind_type3_rows<- function(main, type3) {
+  main %>%
+    dplyr::bind_rows(type3) %>%
+    dplyr::arrange(rid, var) %>%
+    dplyr::select(var, stat, pval, dplyr::everything())
 }
 
 
@@ -253,9 +251,7 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
   out<- calculate_type3_mi(mira_obj, vcov_fun= vcov_fun)
 
   # the order of the variables in the output
-  out_tmp<- out %>%
-    lapply(function(x) attr(x, "col_in_X")) %>%
-    bind_rows()
+  out_tmp<- .mi_term_index(out)
 
   type3_out<- out %>%
     bind_rows() %>%
@@ -273,6 +269,9 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
            conf_low = if (exponentiate) exp(conf_low) else conf_low,
            conf_high= if (exponentiate) exp(conf_high) else conf_high,
            stat = sprintf("%4.3f [%4.3f, %4.3f]", est, conf_low, conf_high),
+           # match each coefficient row to its type-3 variable: strip glm's
+           # "TRUE" suffix on logical dummies, then prefix-match (charmatch)
+           # against the type-3 variable names
            pval= type3_out$pval[charmatch(gsub("TRUE$", "", term), type3_out$var)]) %>%
     select(term, stat, pval, rid, everything())  %>%
     rename(var= term)
@@ -281,10 +280,7 @@ summarize_mi_glm<- function(mira_obj, exponentiate= FALSE, alpha= .05, vcov_fun=
     filter(df>1) %>%
     dplyr::select(var, pval, rid)
 
-  glm_out %>%
-    bind_rows(type3_out) %>%
-    arrange(rid, var) %>%
-    select(var, stat, pval, everything())
+  .bind_type3_rows(glm_out, type3_out)
 }
 
 #' @title summarize_mi_coxph
@@ -306,9 +302,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
   out<- calculate_type3_mi(cox_mira)
 
   # the order of the variables in the output
-  out_tmp<- out %>%
-    lapply(function(x) attr(x, "col_in_X")) %>%
-    bind_rows()
+  out_tmp<- .mi_term_index(out)
 
   type3_out<- out %>%
     bind_rows() %>%
@@ -317,14 +311,11 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     dplyr::select(var, pval, rid)
 
   cox_out<- cox_mira %>%
-    # pool() %>%
     # see https://github.com/amices/mice/issues/246#
     mice::pool(dfcom = mice::getfit(., 1L)$nevent - length(coef(mice::getfit(., 1L)))) %>%
     summary(conf.int = TRUE,
             conf.level = 1-alpha,
             exponentiate= exponentiate) %>%
-    # as.data.frame() %>%
-    # rownames_to_column("var") %>%
     rename(est      = estimate,
            pval     = p.value,
            conf_low = `2.5 %`,
@@ -335,10 +326,7 @@ summarize_mi_coxph<- function(cox_mira, exponentiate= TRUE, alpha= .05) {
     dplyr::select(var, stat, pval, est, conf_low, conf_high) %>%
     full_join(out_tmp, by= c("var" = "term"))
 
-  cox_out %>%
-    bind_rows(type3_out) %>%
-    arrange(rid, var) %>%
-    select(var, stat, pval, everything())
+  .bind_type3_rows(cox_out, type3_out)
 }
 
 #' @title generate_mi_glm_termplot_df
@@ -386,7 +374,7 @@ generate_mi_glm_termplot_df<- function(mira_obj,
 
   plot_d<- termplot(dummy_mdl, terms= terms, plot= FALSE)
 
-  plot_d<- mapply(function(df, cc, var, tt) {
+  plot_d<- mapply(function(df, cc, var, term_id) {
 
     mm<- matrix(apply(mm_orig, 2, mean),
                 nrow = nrow(df),
@@ -409,8 +397,10 @@ generate_mi_glm_termplot_df<- function(mira_obj,
 
     # now calculate the standard error
     tmp<- df
+    # termplot() names its per-term data frames c("x", "y"); rename "x" to the
+    # term's carrier variable so model.matrix() finds it below
     names(tmp)<- gsub("x", sapply(str2expression(var), carrier.name), names(tmp))
-    mm[, tt == varseq]<- (model.matrix(as.formula(paste("~ ", var)), data= tmp)[,-1])
+    mm[, term_id == varseq]<- (model.matrix(as.formula(paste("~ ", var)), data= tmp)[,-1])
     df$se<- sqrt(diag(mm %*% mi_res$variance %*% t(mm)))
 
     df %>%
@@ -420,13 +410,8 @@ generate_mi_glm_termplot_df<- function(mira_obj,
   df= plot_d,
   cc= if (is.null(center_at)) vector("list", length(terms)) else center_at,
   var= cn,
-  tt= terms,
+  term_id= terms,
   SIMPLIFY = FALSE)
-
-  # the next two (commented out) lines to check if I constructed the design matrix correctly
-  # they should equal plot_d$y
-  # xx<- as.numeric(mm %*% mi_res$coefficients)
-  # xx<- xx - xx[which_x]
 
   plot_d
 }

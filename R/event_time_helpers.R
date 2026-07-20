@@ -32,19 +32,19 @@ annotate_pvalue <- function(p, label, pvalue_pos, plot_theme) {
 
 # colour/fill scale pair for a color scheme. show_surv() uses grey_end = 0.75 with no
 # guide argument; show_cif() uses grey_end = 0.65 and passes guide_legend(title = "")
-# positionally, as its original inline code did
+# positionally, as its original inline code did. The "manual" scheme takes its
+# arguments verbatim from color_list and (as always) ignores the extra guide.
 event_time_color_scales <- function(color_scheme, color_list, grey_end = 0.75, blank_guide_title = FALSE) {
   extra <- if (blank_guide_title) list(guide_legend(title = "")) else list()
-  make_scale <- function(fun_prefix) {
-    switch(color_scheme,
-      "brewer"  = do.call(paste0(fun_prefix, "_brewer"), c(list(palette = "Set1"), extra)),
-      "grey"    = do.call(paste0(fun_prefix, "_grey"), c(list(start = 0, end = grey_end), extra)),
-      "viridis" = do.call(
-        paste0(fun_prefix, "_viridis"),
-        c(list(option = "viridis", begin = .2, end = .85, discrete = TRUE), extra)
-      ),
-      "manual"  = do.call(paste0(fun_prefix, "_manual"), color_list)
-    )
-  }
-  list(colour = make_scale("scale_color"), fill = make_scale("scale_fill"))
+  fns <- switch(color_scheme,
+    "brewer"  = list(colour = scale_color_brewer, fill = scale_fill_brewer,
+                     args = c(list(palette = "Set1"), extra)),
+    "grey"    = list(colour = scale_color_grey, fill = scale_fill_grey,
+                     args = c(list(start = 0, end = grey_end), extra)),
+    "viridis" = list(colour = viridis::scale_color_viridis, fill = viridis::scale_fill_viridis,
+                     args = c(list(option = "viridis", begin = .2, end = .85, discrete = TRUE), extra)),
+    "manual"  = list(colour = scale_color_manual, fill = scale_fill_manual,
+                     args = color_list)
+  )
+  list(colour = do.call(fns$colour, fns$args), fill = do.call(fns$fill, fns$args))
 }

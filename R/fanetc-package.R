@@ -15,15 +15,13 @@
 #' @import gtsummary
 #' @import survival
 #' @importFrom cmprsk cuminc
-#' @importFrom reshape2 melt dcast
-#' @importFrom viridis scale_color_viridis scale_colour_viridis scale_fill_viridis
 #' @importFrom forcats fct_drop
 #' @importFrom magrittr %>% %$%
 #' @importFrom rlang := quo_get_expr
 #' @importFrom tidyr unnest pivot_wider
 #' @importFrom purrr map2 reduce
 #' @importFrom tibble rownames_to_column
-#' @importFrom stats as.formula coef model.matrix pchisq pf qnorm quantile relevel sd setNames termplot vcov
+#' @importFrom stats approxfun as.formula coef model.matrix pchisq pf qnorm quantile relevel sd setNames termplot vcov
 NULL
 
 ## Column names created/consumed inside dplyr/tidyr/magrittr pipelines (plus

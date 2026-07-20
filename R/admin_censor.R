@@ -1,5 +1,12 @@
 #---- Administrative censoring for survival and competing-risk data ----
 
+# output column names: the originals when overwriting, otherwise "<name>_adm"
+.admin_censor_names<- function(evt_time, evt, overwrite_var) {
+  suffix<- if (overwrite_var) "" else "_adm"
+  c(time= paste0(rlang::as_name(evt_time), suffix),
+    evt = paste0(rlang::as_name(evt), suffix))
+}
+
 #' @title admin_censor_surv
 #'
 #' @details
@@ -22,35 +29,17 @@
 #' aml %>% admin_censor_surv(evt_time= time, evt= status, adm_cnr_time= 30, overwrite_var= TRUE)
 #' @export
 admin_censor_surv <- function(df, evt_time, evt, adm_cnr_time = NULL, overwrite_var = FALSE) {
-  ######################################################################################
-  ## the function creates administrately censored version of event time and indicator ##
-  ## for survival (binary) process                                                    ##
-  ##   df - input dataframe                                                           ##
-  ##   evt_time - continuous time to event                                            ##
-  ##   evt - event indicator (1= event; 0= non-event)                                 ##
-  ##   adm_cnr_time - time at which admin censoring is applied                        ##
-  ######################################################################################
-
   evt_time <- enquo(evt_time)
   evt <- enquo(evt)
 
-  if (!is.null(adm_cnr_time)) {
-    if (overwrite_var) {
-      cnr_evt_time_name <- lazyeval::as_name(evt_time)
-      cnr_evt_name <- lazyeval::as_name(evt)
-    } else {
-      cnr_evt_time_name <- paste0(lazyeval::as_name(evt_time), "_adm")
-      cnr_evt_name <- paste0(lazyeval::as_name(evt), "_adm")
-    }
+  if (is.null(adm_cnr_time)) return(df)
 
-    df <- df %>%
-      mutate(
-        !!cnr_evt_name := replace(!!evt, !!evt_time > adm_cnr_time & !!evt != 0, 0),
-        !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
-      )
-  }
-
-  df
+  nm<- .admin_censor_names(evt_time, evt, overwrite_var)
+  df %>%
+    mutate(
+      !!nm[["evt"]] := replace(!!evt, !!evt_time > adm_cnr_time & !!evt != 0, 0),
+      !!nm[["time"]] := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
+    )
 }
 
 #' @title admin_censor_cmprisk
@@ -65,7 +54,7 @@ admin_censor_surv <- function(df, evt_time, evt, adm_cnr_time = NULL, overwrite_
 #' @param evt_time a numeric vector recording the time points at which the event occurs.
 #' @param evt a factor vector indicating right censoring (0= censored; 1= event of interest; other= competing risk(s)).
 #' @param adm_cnr_time a numeric vector specifying the time point at which administrative censoring is applied.
-#' @param evt_label a numeric vector specifying the time point at which administrative censoring is applied.
+#' @param evt_label an optional named vector mapping event codes (its names) to display labels; when given, the censored event variable is returned as a factor with these labels.
 #' @param overwrite_var a logical scalar (default= FALSE) indiciates if the existing time-to-event variables should be overwritten.
 #' @return The input data plus censored time-to-event variables.
 #' @examples
@@ -79,37 +68,15 @@ admin_censor_cmprisk <- function(df, evt_time, evt, adm_cnr_time = NULL, evt_lab
   evt_time <- enquo(evt_time)
   evt <- enquo(evt)
 
-  if (is.null(adm_cnr_time)) {
-    stop("No administrative censor time is given.")
-  } else {
-    if (overwrite_var) {
-      cnr_evt_time_name <- lazyeval::as_name(evt_time)
-      cnr_evt_name <- lazyeval::as_name(evt)
-    } else {
-      cnr_evt_time_name <- paste0(lazyeval::as_name(evt_time), "_adm")
-      cnr_evt_name <- paste0(lazyeval::as_name(evt), "_adm")
-    }
+  if (is.null(adm_cnr_time)) stop("No administrative censor time is given.")
 
-    df <- df %>%
-      {
-        if (is.null(evt_label)) {
-          mutate(
-            !!cnr_evt_name := replace(!!evt, !!evt_time > adm_cnr_time & !!evt != "0", "0"),
-            !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
-          )
-        } else {
-          mutate(
-            !!cnr_evt_name := factor(replace(!!evt, !!evt_time > adm_cnr_time & !!evt != "0", "0"),
-              # as.integer(names(evt_label)),
-              names(evt_label),
-              labels = evt_label
-            ),
-            !!cnr_evt_time_name := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
-          )
-        }
-      }
-  }
-
-  df
+  nm<- .admin_censor_names(evt_time, evt, overwrite_var)
+  df %>%
+    mutate(
+      !!nm[["evt"]] := {
+        censored<- replace(!!evt, !!evt_time > adm_cnr_time & !!evt != "0", "0")
+        if (is.null(evt_label)) censored else factor(censored, names(evt_label), labels = evt_label)
+      },
+      !!nm[["time"]] := replace(!!evt_time, !!evt_time > adm_cnr_time, adm_cnr_time)
+    )
 }
-

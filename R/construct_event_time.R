@@ -24,6 +24,21 @@ fix_nonpositive_times <- function(time2evt, diag_df) {
   time2evt
 }
 
+# shared tail of construct_surv_var()/construct_cmprisk_var(): assemble the
+# patid/time2evt/evt tibble, apply the non-positive-time fixes (whose printed
+# diagnostics use these pre-rename column names), rename to the requested
+# variable names, and append to df or return standalone
+.finalize_event_vars <- function(df, patid_quo, time2evt, evt, varname, append) {
+  out <- dplyr::tibble(
+    !!rlang::as_name(patid_quo) := dplyr::pull(df, !!patid_quo),
+    time2evt = time2evt,
+    evt = evt
+  )
+  out$time2evt <- fix_nonpositive_times(out$time2evt, out)
+  names(out)[2:3] <- varname
+  if (append) dplyr::bind_cols(df, out[varname]) else out
+}
+
 #' @title construct_surv_var
 #'
 #' @details
@@ -75,18 +90,8 @@ construct_surv_var <- function(df, patid, idx_dt, evt_dt, end_dt, surv_varname =
   evt <- as.integer(!is.na(evt_date))
   time2evt <- as.numeric(dplyr::coalesce(evt_date, end_date) - idx_date)
 
-  out <- dplyr::tibble(
-    !!rlang::as_name(patid) := dplyr::pull(df, !!patid),
-    time2evt = time2evt,
-    evt = evt
-  )
-
-  out$time2evt <- fix_nonpositive_times(out$time2evt, out)
-
   varname <- if (is.null(surv_varname)) c("evt_time", "evt") else surv_varname
-  names(out)[2:3] <- varname
-
-  if (append) dplyr::bind_cols(df, out[varname]) else out
+  .finalize_event_vars(df, patid, time2evt, evt, varname, append)
 }
 
 #' @title construct_cmprisk_var
@@ -188,15 +193,5 @@ construct_cmprisk_var <- function(df,
   evt[is.na(time2evt)] <- NA_integer_
   evt <- factor(evt, 0:(n_cmp_evt + 1), labels = 0:(n_cmp_evt + 1))
 
-  out <- dplyr::tibble(
-    !!rlang::as_name(patid) := dplyr::pull(df, !!patid),
-    time2evt = time2evt,
-    evt = evt
-  )
-
-  out$time2evt <- fix_nonpositive_times(out$time2evt, out)
-
-  names(out)[2:3] <- varname
-
-  if (append) dplyr::bind_cols(df, out[varname]) else out
+  .finalize_event_vars(df, patid, time2evt, evt, varname, append)
 }
