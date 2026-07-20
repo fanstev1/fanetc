@@ -813,6 +813,17 @@ git commit -m "refactor: dispatch color scales via explicit function objects"
 
 ### Task 7: `admin_censor.R` — dedupe, drop `lazyeval`, fix docs
 
+> **Deviation note (2026-07-19, coordinator decision):** execution discovered that
+> `admin_censor_cmprisk()` is broken in the current code (and in released v1.0.0):
+> the `df %>% { if (...) mutate(...) }` braced pipe never inserts the data into
+> `mutate()`, so EVERY call with a non-NULL `adm_cnr_time` errors with
+> "`:=` can only be used within dynamic dots". The refactor below therefore also
+> FIXES this crash — the second deliberate crash-to-works improvement on this
+> branch (after `add_atrisk()`'s NULL-text theme in Task 5). Step 1's two
+> `admin_censor_cmprisk()` output tests are red pre-refactor and green after;
+> the `admin_censor_surv()` tests are true pins (that function was never broken).
+> Task 13's HANDOFF section must record this bug fix.
+
 **Files:**
 - Create: `tests/testthat/test-admin_censor.R`
 - Modify: `R/admin_censor.R`
