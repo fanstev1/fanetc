@@ -6,6 +6,6 @@
 \alias{fanetc-package}
 \title{fanetc: Descriptive table}
 \description{
-Miscellaneous functions that Steve wrote to facilitate TRCP data analysis project.
+Miscellaneous functions that Steve wrote to facilitate day-to-day data-analysis projects.
 }
 \keyword{internal}
