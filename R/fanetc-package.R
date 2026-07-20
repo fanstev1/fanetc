@@ -15,7 +15,6 @@
 #' @import gtsummary
 #' @import survival
 #' @importFrom cmprsk cuminc
-#' @importFrom reshape2 melt dcast
 #' @importFrom viridis scale_color_viridis scale_colour_viridis scale_fill_viridis
 #' @importFrom forcats fct_drop
 #' @importFrom magrittr %>% %$%
