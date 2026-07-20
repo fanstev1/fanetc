@@ -97,18 +97,45 @@ table_one <- function(df,
   set.seed(0) # For reproducibility of Fisher's exact test p-values
   continuous_stat <- match.arg(continuous_stat)
 
-  # Capture group variable (for NSE)
   group <- rlang::enquo(group)
   include <- rlang::enquo(include)
-
-  has_group <- !rlang::quo_is_missing(group)
-  has_include <- !rlang::quo_is_missing(include)
-
-  # datadic column selectors (unquoted symbols or strings, as in the old API)
   var_name <- rlang::enquo(var_name)
   var_desp <- rlang::enquo(var_desp)
-  name_col <- if (rlang::quo_is_missing(var_name)) "var_name" else rlang::as_name(var_name)
-  desp_col <- if (rlang::quo_is_missing(var_desp)) "var_desp" else rlang::as_name(var_desp)
+
+  .table_one_impl(
+    df,
+    group_name = if (rlang::quo_is_missing(group)) NULL else rlang::quo_name(group),
+    include_quo = if (rlang::quo_is_missing(include)) NULL else include,
+    datadic = datadic,
+    name_col = if (rlang::quo_is_missing(var_name)) "var_name" else rlang::as_name(var_name),
+    desp_col = if (rlang::quo_is_missing(var_desp)) "var_desp" else rlang::as_name(var_desp),
+    missing = missing, missing_text = missing_text,
+    missing_group_exclude = missing_group_exclude,
+    add_p = add_p, add_overall = add_overall, sort_by_p = sort_by_p,
+    continuous_stat = continuous_stat, pvalue_fun = pvalue_fun
+  )
+}
+
+# Implementation behind table_one(), taking resolved values: group_name/name_col/
+# desp_col are strings (or NULL), include_quo is a tidyselect quosure or NULL.
+# table_one_paired() calls this directly, bypassing NSE argument re-capture.
+.table_one_impl <- function(df,
+                            group_name = NULL,
+                            include_quo = NULL,
+                            datadic = NULL,
+                            name_col = "var_name",
+                            desp_col = "var_desp",
+                            missing = "ifany",
+                            missing_text = "(Missing)",
+                            missing_group_exclude = TRUE,
+                            add_p = NULL,
+                            add_overall = NULL,
+                            sort_by_p = FALSE,
+                            continuous_stat = "meansd",
+                            pvalue_fun = format_pvalue) {
+
+  has_group <- !is.null(group_name)
+
   if (!is.null(datadic) && !all(c(name_col, desp_col) %in% names(datadic))) {
     stop("`datadic` must contain columns `", name_col, "` and `", desp_col, "`")
   }
@@ -124,26 +151,24 @@ table_one <- function(df,
       dplyr::select(dplyr::where(~ !is.character(.) && !inherits(., "Date"))) %>%
       # Drop unused factor levels
       dplyr::mutate(dplyr::across(dplyr::where(is.factor), forcats::fct_drop))
-  
-  df <- if (has_include && has_group) {
-    include_loc <- tidyselect::eval_select(include, df)
-    group_loc <- tidyselect::eval_select(group, df)
-    df[, sort(unique(c(group_loc, include_loc)))]
-  } else if (has_include && !has_group) {
-    include_loc <- tidyselect::eval_select(include, df)
-    df[, include_loc]
-  } else {
-    df # everything
+
+  if (!is.null(include_quo)) {
+    include_loc <- tidyselect::eval_select(include_quo, df)
+    df <- if (has_group) {
+      group_loc <- match(group_name, names(df))
+      df[, sort(unique(c(group_loc, include_loc)))]
+    } else {
+      df[, include_loc]
+    }
   }
 
   # Remove observations with a missing group value (or keep them as an
   # explicit level); group_col is then simply the resulting column
   if (has_group) {
-    group_name <- rlang::quo_name(group)
     if (missing_group_exclude) {
-      df <- dplyr::filter(df, !is.na(!!group))
+      df <- dplyr::filter(df, !is.na(.data[[group_name]]))
     } else {
-      df <- dplyr::mutate(df, !!group := forcats::fct_na_value_to_level(!!group, level = missing_text))
+      df <- dplyr::mutate(df, !!rlang::sym(group_name) := forcats::fct_na_value_to_level(.data[[group_name]], level = missing_text))
     }
     group_col <- df[[group_name]]
   }

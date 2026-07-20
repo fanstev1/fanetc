@@ -77,23 +77,27 @@
   wide[stats::complete.cases(wide[c(".ref", ".other")]), , drop = FALSE]
 }
 
+# run a paired-test expression: warnings muffled, errors -> NA, and NaN from
+# degenerate tests (e.g. zero-discordant-pair denominators) normalized to
+# NA_real_, as the design specifies
+.paired_safe_pvalue <- function(expr) {
+  p <- tryCatch(
+    withCallingHandlers(expr, warning = function(w) invokeRestart("muffleWarning")),
+    error = function(e) NA_real_
+  )
+  if (!is.finite(p)) NA_real_ else p
+}
+
 .paired_make_cont_test_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level, continuous_stat) {
   function(data, variable, by, ...) {
     wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
-    p <- tryCatch(
-      withCallingHandlers({
-        if (continuous_stat == "meansd") {
-          stats::t.test(wide$.other, wide$.ref, paired = TRUE)$p.value
-        } else {
-          stats::wilcox.test(wide$.other, wide$.ref, paired = TRUE)$p.value
-        }
-      }, warning = function(w) invokeRestart("muffleWarning")),
-      error = function(e) NA_real_
+    p <- .paired_safe_pvalue(
+      if (continuous_stat == "meansd") {
+        stats::t.test(wide$.other, wide$.ref, paired = TRUE)$p.value
+      } else {
+        stats::wilcox.test(wide$.other, wide$.ref, paired = TRUE)$p.value
+      }
     )
-    # mcnemar.test()/t.test() degenerate cases can return NaN (e.g. division by a
-    # zero-discordant-pairs denominator) rather than NA_real_; the design specifies
-    # NA, so normalize here rather than leaving NaN in the table body.
-    if (!is.finite(p)) p <- NA_real_
     dplyr::tibble(p.value = p)
   }
 }
@@ -101,16 +105,12 @@
 .paired_make_cat_test_fn <- function(paired_df, pair_id_name, group_name, ref_level, other_level) {
   function(data, variable, by, ...) {
     wide <- .paired_wide(paired_df, pair_id_name, group_name, ref_level, other_level, variable)
-    p <- tryCatch(
-      withCallingHandlers({
-        lv <- union(as.character(unique(wide$.ref)), as.character(unique(wide$.other)))
-        ref_f   <- factor(as.character(wide$.ref),   levels = lv)
-        other_f <- factor(as.character(wide$.other), levels = lv)
-        stats::mcnemar.test(table(ref_f, other_f))$p.value
-      }, warning = function(w) invokeRestart("muffleWarning")),
-      error = function(e) NA_real_
-    )
-    if (!is.finite(p)) p <- NA_real_
+    p <- .paired_safe_pvalue({
+      lv <- union(as.character(unique(wide$.ref)), as.character(unique(wide$.other)))
+      ref_f   <- factor(as.character(wide$.ref),   levels = lv)
+      other_f <- factor(as.character(wide$.other), levels = lv)
+      stats::mcnemar.test(table(ref_f, other_f))$p.value
+    })
     dplyr::tibble(p.value = p)
   }
 }
@@ -293,31 +293,27 @@ table_one_paired <- function(df, pair_id, group,
 
   desc_data <- data[, include_names, drop = FALSE]
 
-  te_call <- rlang::call2(
-    "table_one", quote(desc_data),
-    group = rlang::sym(group_name),
+  tbl <- .table_one_impl(
+    desc_data,
+    group_name = group_name,
     datadic = datadic,
+    name_col = if (rlang::quo_is_missing(var_name_q)) "var_name" else rlang::as_name(var_name_q),
+    desp_col = if (rlang::quo_is_missing(var_desp_q)) "var_desp" else rlang::as_name(var_desp_q),
     missing = missing, missing_text = missing_text,
     add_p = FALSE, add_overall = FALSE,
     continuous_stat = continuous_stat
   )
-  if (!rlang::quo_is_missing(var_name_q)) te_call$var_name <- rlang::quo_get_expr(var_name_q)
-  if (!rlang::quo_is_missing(var_desp_q)) te_call$var_desp <- rlang::quo_get_expr(var_desp_q)
-  tbl <- eval(te_call, envir = environment())
-
-  n_pairs_fn   <- .paired_make_n_pairs_fn(data, pair_id_name, group_name, ref_level, other_level)
-  smd_fn       <- .paired_make_smd_fn(data, pair_id_name, group_name, ref_level, other_level, pairing_method)
-  cont_test_fn <- .paired_make_cont_test_fn(data, pair_id_name, group_name, ref_level, other_level, continuous_stat)
-  cat_test_fn  <- .paired_make_cat_test_fn(data, pair_id_name, group_name, ref_level, other_level)
 
   if (add_overall) tbl <- gtsummary::add_overall(tbl)
 
   if (add_n_pairs) {
+    n_pairs_fn <- .paired_make_n_pairs_fn(data, pair_id_name, group_name, ref_level, other_level)
     tbl <- gtsummary::add_stat(tbl, fns = gtsummary::everything() ~ n_pairs_fn)
     tbl <- gtsummary::modify_header(tbl, n_pairs ~ "**N pairs**")
   }
 
   if (add_smd) {
+    smd_fn <- .paired_make_smd_fn(data, pair_id_name, group_name, ref_level, other_level, pairing_method)
     tbl <- gtsummary::add_stat(tbl, fns = gtsummary::everything() ~ smd_fn)
     tbl <- gtsummary::modify_header(tbl, smd ~ "**SMD**")
     smd_note <- if (pairing_method == "matching") {
@@ -333,6 +329,8 @@ table_one_paired <- function(df, pair_id, group,
   }
 
   if (add_p) {
+    cont_test_fn <- .paired_make_cont_test_fn(data, pair_id_name, group_name, ref_level, other_level, continuous_stat)
+    cat_test_fn  <- .paired_make_cat_test_fn(data, pair_id_name, group_name, ref_level, other_level)
     tbl <- gtsummary::add_p(
       tbl,
       test = list(gtsummary::all_continuous()  ~ cont_test_fn,
