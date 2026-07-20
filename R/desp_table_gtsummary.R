@@ -121,43 +121,31 @@ table_one <- function(df,
   df <- df %>%
       dplyr::ungroup() %>%
       # Remove character and date variables
-      dplyr::select(dplyr::where(~ !is.character(.) & !inherits(., "Date"))) %>%
+      dplyr::select(dplyr::where(~ !is.character(.) && !inherits(., "Date"))) %>%
       # Drop unused factor levels
-      dplyr::mutate_if(is.factor, forcats::fct_drop)
+      dplyr::mutate(dplyr::across(dplyr::where(is.factor), forcats::fct_drop))
   
-  df <- if (has_include & has_group) {
+  df <- if (has_include && has_group) {
     include_loc <- tidyselect::eval_select(include, df)
     group_loc <- tidyselect::eval_select(group, df)
     df[, sort(unique(c(group_loc, include_loc)))]
-  } else if (has_include & !has_group) {
+  } else if (has_include && !has_group) {
     include_loc <- tidyselect::eval_select(include, df)
     df[, include_loc]
   } else {
     df # everything
   }
 
-  # Remove observations with missing group variable from summary if present
+  # Remove observations with a missing group value (or keep them as an
+  # explicit level); group_col is then simply the resulting column
   if (has_group) {
     group_name <- rlang::quo_name(group)
-    group_col <- dplyr::pull(df, all_of(group_name))
-
-    # df <- df %>%
-    #   dplyr::select(-all_of(group_name)) %>%
-    #   dplyr::filter(!is.na(group_col)) %>%
-    #   dplyr::mutate(!!group_name := group_col)
-    df <- df %>% {
-        if (missing_group_exclude) {
-          dplyr::filter(., !is.na(!!group))
-        } else {
-          dplyr::mutate(., !!group := forcats::fct_na_value_to_level(!!group, level = missing_text))
-        }
-    }
-
-    group_col<- if (missing_group_exclude) {
-        group_col[!is.na(group_col)]
+    if (missing_group_exclude) {
+      df <- dplyr::filter(df, !is.na(!!group))
     } else {
-      forcats::fct_na_value_to_level(group_col, level = missing_text)
+      df <- dplyr::mutate(df, !!group := forcats::fct_na_value_to_level(!!group, level = missing_text))
     }
+    group_col <- df[[group_name]]
   }
 
   # gtsummary requires glue strings for statistics; med_q1_q3 uses type-1
@@ -188,8 +176,7 @@ table_one <- function(df,
   # Build the base tbl_summary
   tbl <- gtsummary::tbl_summary(
     data = df,
-    by = if (has_group) rlang::quo_name(group) else NULL,
-    # include = if (has_group) -all_of(rlang::quo_name(group)) else everything(),
+    by = if (has_group) group_name else NULL,
     missing = missing,
     missing_text = missing_text,
     statistic = list(
@@ -206,66 +193,40 @@ table_one <- function(df,
       # gtsummary requires a named list (not a named vector)
       as.list(setNames(datadic[[desp_col]], datadic[[name_col]]))
     } else NULL
-  ) %>%
-    # Add p-values if comparing groups
-    {
-      if (add_p & has_group) {
-        # Determine number of groups to select appropriate statistical tests
-        # group_name <- rlang::quo_name(group)
-        # n_groups_val <- length(unique(dplyr::pull(df, all_of(group_name))))
-        n_groups_val <- length(unique(group_col))
+  )
 
-        # For continuous: choose based on continuous_stat
-        cont_test <- if (continuous_stat == "meansd") {
-          if (n_groups_val == 2) "t.test" else "oneway.test"
-        } else {
-          if (n_groups_val == 2) "wilcox.test" else "kruskal.test"
-        }
+  if (add_p && has_group) {
+    # Determine number of groups to select appropriate statistical tests
+    n_groups_val <- length(unique(group_col))
 
-        gtsummary::add_p(
-          .,
-          test = list(
-            all_continuous() ~ cont_test,
-            all_categorical() ~ "fisher.test"
-          ),
-          pvalue_fun = pvalue_fun,
-        #   test.args = list(
-        #     all_continuous() ~ list(var.equal = FALSE),
-        #     all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)
-        #   ),
-          test.args = list(all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)) %>% 
-          append(
-             if (continuous_stat == "meansd") list(all_continuous() ~ list(var.equal = FALSE)) else list()
-          )
-        )
-      } else {
-        .
-      }
-    } %>%
-    # Add overall column
-    {
-      if (add_overall & has_group) {
-        gtsummary::add_overall(.)
-      } else {
-        .
-      }
-    } %>%
-    # Sort by p-value if requested
-    {
-      if (sort_by_p & add_p & has_group) {
-        gtsummary::sort_p(.)
-      } else {
-        .
-      }
+    # For continuous: choose based on continuous_stat
+    cont_test <- if (continuous_stat == "meansd") {
+      if (n_groups_val == 2) "t.test" else "oneway.test"
+    } else {
+      if (n_groups_val == 2) "wilcox.test" else "kruskal.test"
     }
+
+    test_args <- c(
+      list(all_categorical() ~ list(hybrid = TRUE, simulate.p.value = TRUE)),
+      if (continuous_stat == "meansd") list(all_continuous() ~ list(var.equal = FALSE))
+    )
+
+    tbl <- gtsummary::add_p(
+      tbl,
+      test = list(
+        all_continuous() ~ cont_test,
+        all_categorical() ~ "fisher.test"
+      ),
+      pvalue_fun = pvalue_fun,
+      test.args = test_args
+    )
+  }
+
+  if (add_overall && has_group) tbl <- gtsummary::add_overall(tbl)
+  if (sort_by_p && add_p && has_group) tbl <- gtsummary::sort_p(tbl)
 
   tbl
 }
-
-# table_one(df)
-# table_one(df, group = sex)
-# table_one(df, include = c(male, age))
-# table_one(df, group = sex, include = c(group, age))
 
 # Type-1 quantile statistics referenced by name in the tbl_summary() glue
 # string, matching the historical med_iqr() output
