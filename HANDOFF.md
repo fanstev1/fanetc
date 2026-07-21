@@ -1,10 +1,43 @@
-# Hand-off note — updated 2026-07-19 (geom_ribbon_step)
+# Hand-off note — updated 2026-07-20 (maintainability refactor)
 
-## Maintainability refactor (2026-07-19)
+## Latest: maintainability refactor — package-wide simplification (2026-07-20)
+
+Merged to `master` and pushed to origin via PR #1 (`0599a01..79516c2`, merge
+commit `79516c2`; 22 commits: 13 tasks, each pin-then-refactor, plus a
+post-review fix round). Branch `refactor/maintainability-review` deleted on
+origin after merge. Test suite: 328 → 384 (all new), 0 FAIL / 0 WARN on the
+merged result. R CMD check: the pre-existing `class() != "factor"` NOTE is
+gone; otherwise unchanged (1 pre-existing WARNING + 4 pre-existing NOTEs, all
+environmental — `flextable`/`openxlsx` unavailable locally, timestamp/file
+NOTEs, Rd line-width NOTEs).
 
 - All `R/` files received a behavior-preserving maintainability refactor following
   `docs/superpowers/plans/2026-07-19-maintainability-refactor.md`; exported APIs
   remain unchanged.
+- Driven by a dual independent review (Claude + Codex, both high effort) of
+  the whole package, executed as a 13-task plan via subagent-driven
+  development (Codex implemented each task from a self-contained brief;
+  every task independently reviewed for spec + quality before commit; a
+  final whole-branch dual review before merge). See
+  `docs/superpowers/plans/2026-07-19-maintainability-refactor.md` and
+  `.superpowers/sdd/progress.md` for the full task-by-task ledger.
+- Collapsed duplicated branch logic into single parameterized paths:
+  `show_cif()`'s three near-identical plotting branches → one series
+  mapping; `summarize_km()`/`summarize_cif()`'s stratified/unstratified
+  pipelines → one `has_strata`-gated pipeline; `extract_atrisk()`'s two
+  strata paths → one; `prepare_survfit()`'s two large nested functions →
+  three file-level helpers (`.survfit_strata()`, `.prepare_km_data()`,
+  `.prepare_multistate_data()`); `estimate_km()`/`estimate_cif()`'s
+  independent metaprogramming → one shared `.survfit_call()` builder;
+  `table_one()`'s three piped `{ if }` stages → sequential `if` blocks, then
+  split into a thin NSE wrapper + internal `.table_one_impl()` (reused
+  directly by `table_one_paired()`, replacing a `call2()`/`eval()`
+  construction); `decimalplaces()` rewritten as an explicit mode
+  calculation; MI-summary helpers deduplicated (`.mi_term_index()`,
+  `.bind_type3_rows()`); `admin_censor_surv()`/`admin_censor_cmprisk()`
+  naming deduplicated (`.admin_censor_names()`);
+  `construct_surv_var()`/`construct_cmprisk_var()`'s shared tail extracted
+  (`.finalize_event_vars()`).
 - The `lazyeval` and `reshape2` dependencies were removed.
 - Two sanctioned crash-to-works improvements are included: `add_atrisk()` no
   longer errors when its theme text settings are `NULL`, and
@@ -27,7 +60,7 @@
   their respective `make_*_baseline.R` scripts. Regenerate them only from the
   pre-refactor code identified by those scripts, never from current code.
 
-## Latest: geom_ribbon_step() — step-function CI ribbons (2026-07-19)
+## geom_ribbon_step() — step-function CI ribbons (2026-07-19)
 
 Merged to `master` and pushed to origin (`0c67296..3131279`, merge commit
 `3131279`; 4 feature commits + spec/plan docs).
