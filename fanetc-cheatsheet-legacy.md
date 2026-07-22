@@ -56,7 +56,8 @@ All 12 fanetc-exported functions the skills call are present on legacy. `Cs()` i
 - Tabulates fitted KM at `times`; identical to master. (Rd has no `\arguments{}` block on this branch.)
 
 ### add_atrisk(p, surv_obj, x_break = NULL, atrisk_init_pos = NULL, plot_theme = NULL) — (from R/ source, no Rd)
-- No `man/add_atrisk.Rd` exists on this branch even though it's exported; signature confirmed from `R/event_time_desp.R`. Behavior (at-risk table added below a ggplot, positions in absolute text-lines, panel-clip caveat) matches master's documented behavior, based on source inspection.
+- No `man/add_atrisk.Rd` exists on this branch even though it's exported; signature confirmed from `R/event_time_desp.R`.
+- **`atrisk_init_pos` semantics differ from master.** On this branch, when `atrisk_init_pos` is `NULL` it is set to `-0.225 * max(diff(y-range), diff(y-limits))` and used as a `ymin`/`ymax` **negative y-DATA-coordinate offset** below the panel — there is no strata-aware (single-group vs. multi-group) default. This is unlike master (v1.0.0+), where `atrisk_init_pos` is an **absolute text-line count** (`NULL` defaults to 2.23 lines for >1 group, 3.06 lines for a single group), and a negative value there triggers a warning and is ignored. Because the two branches use different units (data coordinates here vs. text-lines on master), **`atrisk_init_pos` values are not portable between versions** — the at-risk table still needs the same panel-clip-off/`plot.margin` treatment as master, but a numeric value tuned on one branch will not behave the same on the other.
 
 ### extract_atrisk(fit, time.list, time.scale = 1)
 - Returns at-risk counts at `time.list`.
